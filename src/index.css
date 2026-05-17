@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@import "@fontsource/space-mono/400.css";
+@import "@fontsource/space-mono/700.css";
+@import "@fontsource/barlow-condensed/400.css";
+@import "@fontsource/barlow-condensed/500.css";
+@import "@fontsource/barlow-condensed/600.css";
+
+@theme {
+  --color-acid: #CCFF00;
+  --color-acid-dim: #99CC00;
+  --color-surface: #0A0A0A;
+  --color-surface-raised: #141414;
+  --color-surface-hover: #1E1E1E;
+  --color-border: #2A2A2A;
+  --color-text-primary: #E5E5E5;
+  --color-text-secondary: #888888;
+  --color-live: #FF3B3B;
+  --color-conflict: #FF6B2B;
+  --font-mono: "Space Mono", monospace;
+  --font-condensed: "Barlow Condensed", sans-serif;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: var(--font-condensed);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 30px var(--color-surface-raised) inset !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+}

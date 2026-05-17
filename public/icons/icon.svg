@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0A0A0A"/>
+  <g transform="translate(256,256)">
+    <!-- Pulse waveform -->
+    <polyline points="-160,0 -100,0 -70,-100 -30,120 10,-80 50,60 80,0 160,0"
+      fill="none" stroke="#CCFF00" stroke-width="28" stroke-linecap="square" stroke-linejoin="miter"/>
+  </g>
+</svg>
