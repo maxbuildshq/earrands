@@ -17,7 +17,7 @@ WITH fest AS (
   RETURNING id
 )
 INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, is_live)
-SELECT id, NULL, 'Adam Beyer',              '2026-06-06'::date, NULL, NULL, false FROM fest
+SELECT id, NULL::uuid, 'Adam Beyer',        '2026-06-06'::date, NULL::time, NULL::time, false FROM fest
 UNION ALL SELECT id, NULL, 'Anfisa Letyago',         '2026-06-06'::date, NULL, NULL, false FROM fest
 UNION ALL SELECT id, NULL, 'Bart Skils x Marco Faraone', '2026-06-06'::date, NULL, NULL, false FROM fest
 UNION ALL SELECT id, NULL, 'Beste Hira',             '2026-06-06'::date, NULL, NULL, false FROM fest
