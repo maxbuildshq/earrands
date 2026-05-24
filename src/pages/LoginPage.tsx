@@ -11,7 +11,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const returnTo = (location.state as { returnTo?: string })?.returnTo || '/schedule'
+  const returnTo = (location.state as { returnTo?: string })?.returnTo || '/'
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

@@ -11,9 +11,9 @@
   --color-surface: #0A0A0A;
   --color-surface-raised: #141414;
   --color-surface-hover: #1E1E1E;
-  --color-border: #2A2A2A;
+  --color-border: #444444;
   --color-text-primary: #E5E5E5;
-  --color-text-secondary: #888888;
+  --color-text-secondary: #FFFFFF;
   --color-live: #FF3B3B;
   --color-conflict: #FF6B2B;
   --font-mono: "Space Mono", monospace;

@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useParams } from 'react-router-dom'
 import { useFestival, useStages, useSets } from '../hooks/useFestivalData'
 import { useUserPlans } from '../hooks/useUserPlans'
 import { useUserRatings } from '../hooks/useUserRatings'
@@ -7,22 +8,32 @@ import { useAuth } from '../hooks/useAuth'
 import { DayToggle } from '../components/schedule/DayToggle'
 import { StageFilter } from '../components/schedule/StageFilter'
 import { SetCard } from '../components/schedule/SetCard'
-
-const DAYS = ['2026-05-16', '2026-05-17']
+import { LineupView } from '../components/schedule/LineupView'
+import { getDays } from '../lib/dates'
 
 export function SchedulePage() {
+  const { slug } = useParams<{ slug: string }>()
   const { user } = useAuth()
-  const { data: festival } = useFestival()
+  const { data: festival } = useFestival(slug)
   const { data: stages = [] } = useStages(festival?.id)
   const { data: sets = [] } = useSets(festival?.id)
   const { isGoing, toggleGoing } = useUserPlans()
   const { getRating, setRating } = useUserRatings()
   const now = useNow()
 
-  const [selectedDay, setSelectedDay] = useState(DAYS[0])
+  const days = useMemo(() => festival ? getDays(festival.start_date, festival.end_date) : [], [festival])
+
+  const [selectedDay, setSelectedDay] = useState<string>('')
   const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set())
   const nowRef = useRef<HTMLDivElement>(null)
   const hasScrolled = useRef(false)
+
+  // Set initial day when festival loads
+  useEffect(() => {
+    if (days.length > 0 && !selectedDay) {
+      setSelectedDay(days[0])
+    }
+  }, [days, selectedDay])
 
   useEffect(() => {
     if (stages.length > 0 && selectedStages.size === 0) {
@@ -33,8 +44,11 @@ export function SchedulePage() {
   const filteredSets = useMemo(() => {
     return sets
       .filter(s => s.day === selectedDay)
-      .filter(s => selectedStages.has(s.stage_id))
-      .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.stages.sort_order - b.stages.sort_order)
+      .filter(s => s.stage_id && selectedStages.has(s.stage_id))
+      .sort((a, b) => {
+        if (!a.start_time || !b.start_time) return 0
+        return a.start_time.localeCompare(b.start_time) || (a.stages?.sort_order ?? 0) - (b.stages?.sort_order ?? 0)
+      })
   }, [sets, selectedDay, selectedStages])
 
   useEffect(() => {
@@ -63,14 +77,33 @@ export function SchedulePage() {
   if (!festival) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-text-secondary font-mono text-sm tracking-wider animate-pulse">LOADING TIMETABLE...</div>
+        <div className="text-text-secondary font-mono text-sm tracking-wider animate-pulse">LOADING...</div>
+      </div>
+    )
+  }
+
+  // Lineup-only mode for festivals without timetable
+  if (!festival.timetable_announced) {
+    return (
+      <div className="pt-4">
+        <h1 className="font-mono font-bold text-lg text-acid tracking-tight mb-1">{festival.name}</h1>
+        <p className="text-text-secondary text-sm mb-4">{festival.location}</p>
+        {days.length > 0 && (
+          <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
+        )}
+        <LineupView
+          sets={sets}
+          day={selectedDay}
+          isGoing={(id) => isGoing(id)}
+          onToggleGoing={(id) => toggleGoing(id)}
+        />
       </div>
     )
   }
 
   return (
     <div className="pt-4">
-      <DayToggle days={DAYS} selectedDay={selectedDay} onSelect={setSelectedDay} />
+      <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
       <StageFilter
         stages={stages}
         selected={selectedStages}
@@ -80,7 +113,9 @@ export function SchedulePage() {
 
       <div className="space-y-2 mt-2">
         {filteredSets.map(set => {
-          const playing = isNowPlaying(now, set.day, set.start_time, set.end_time)
+          const playing = set.start_time && set.end_time
+            ? isNowPlaying(now, set.day, set.start_time, set.end_time)
+            : false
           return (
             <div key={set.id} ref={playing ? nowRef : undefined}>
               <SetCard

@@ -2,18 +2,34 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { Festival, Stage, SetWithStage } from '../types/database'
 
-export function useFestival() {
-  return useQuery<Festival>({
-    queryKey: ['festival'],
+export function useFestivals() {
+  return useQuery<Festival[]>({
+    queryKey: ['festivals'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('festivals')
         .select('*')
-        .eq('slug', 'awakenings-upclose-2026')
+        .order('start_date', { ascending: false })
+      if (error) throw error
+      return data
+    },
+    staleTime: 24 * 60 * 60 * 1000,
+  })
+}
+
+export function useFestival(slug: string | undefined) {
+  return useQuery<Festival>({
+    queryKey: ['festival', slug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('festivals')
+        .select('*')
+        .eq('slug', slug!)
         .single()
       if (error) throw error
       return data
     },
+    enabled: !!slug,
     staleTime: 24 * 60 * 60 * 1000,
   })
 }

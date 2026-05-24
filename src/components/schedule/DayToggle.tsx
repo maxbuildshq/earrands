@@ -1,12 +1,9 @@
+import { formatDayLabel } from '../../lib/dates'
+
 type Props = {
   days: string[]
   selectedDay: string
   onSelect: (day: string) => void
-}
-
-const DAY_LABELS: Record<string, string> = {
-  '2026-05-16': 'SAT 16 MAY',
-  '2026-05-17': 'SUN 17 MAY',
 }
 
 export function DayToggle({ days, selectedDay, onSelect }: Props) {
@@ -22,7 +19,7 @@ export function DayToggle({ days, selectedDay, onSelect }: Props) {
               : 'bg-surface-raised text-text-secondary hover:text-text-primary'
           }`}
         >
-          {DAY_LABELS[day] || day}
+          {formatDayLabel(day)}
         </button>
       ))}
     </div>

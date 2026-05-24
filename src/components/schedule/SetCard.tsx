@@ -54,9 +54,15 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, sh
           </div>
 
           <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
-            <span className="text-border">·</span>
-            <span>{set.stages.name}</span>
+            {set.start_time && set.end_time && (
+              <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
+            )}
+            {set.stages && set.start_time && (
+              <span className="text-border">·</span>
+            )}
+            {set.stages && (
+              <span>{set.stages.name}</span>
+            )}
           </div>
         </div>
 

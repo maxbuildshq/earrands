@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import { Layout } from './components/layout/Layout'
 import { AuthGuard } from './components/AuthGuard'
+import { FestivalListPage } from './pages/FestivalListPage'
 import { SchedulePage } from './pages/SchedulePage'
 import { MySchedulePage } from './pages/MySchedulePage'
 import { LoginPage } from './pages/LoginPage'
@@ -25,9 +26,9 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<Layout />}>
-              <Route index element={<Navigate to="/schedule" replace />} />
-              <Route path="schedule" element={<SchedulePage />} />
-              <Route path="my-schedule" element={<AuthGuard><MySchedulePage /></AuthGuard>} />
+              <Route index element={<FestivalListPage />} />
+              <Route path="festivals/:slug/schedule" element={<SchedulePage />} />
+              <Route path="festivals/:slug/my-schedule" element={<AuthGuard><MySchedulePage /></AuthGuard>} />
               <Route path="login" element={<LoginPage />} />
               <Route path="signup" element={<SignUpPage />} />
             </Route>

@@ -1,19 +1,22 @@
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useFestival, useSets } from '../hooks/useFestivalData'
 import { useUserPlans } from '../hooks/useUserPlans'
 import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { SetCard } from '../components/schedule/SetCard'
+import { formatDayLabel } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
 function hasConflict(a: SetWithStage, b: SetWithStage): boolean {
   if (a.day !== b.day) return false
+  if (!a.start_time || !a.end_time || !b.start_time || !b.end_time) return false
   return a.start_time < b.end_time && b.start_time < a.end_time
 }
 
 export function MySchedulePage() {
-  const { data: festival } = useFestival()
+  const { slug } = useParams<{ slug: string }>()
+  const { data: festival } = useFestival(slug)
   const { data: sets = [] } = useSets(festival?.id)
   const { planSetIds, isGoing, toggleGoing } = useUserPlans()
   const { getRating, setRating } = useUserRatings()
@@ -22,7 +25,7 @@ export function MySchedulePage() {
   const mySets = useMemo(() => {
     return sets
       .filter(s => planSetIds.has(s.id))
-      .sort((a, b) => a.day.localeCompare(b.day) || a.start_time.localeCompare(b.start_time))
+      .sort((a, b) => a.day.localeCompare(b.day) || (a.start_time ?? '').localeCompare(b.start_time ?? ''))
   }, [sets, planSetIds])
 
   const conflictIds = useMemo(() => {
@@ -43,7 +46,7 @@ export function MySchedulePage() {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-text-secondary font-mono text-sm">NO SETS MARKED YET</p>
         <Link
-          to="/schedule"
+          to={`/festivals/${slug}/schedule`}
           className="px-4 py-2 bg-acid text-surface font-mono font-bold text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors"
         >
           Browse Schedule
@@ -64,13 +67,15 @@ export function MySchedulePage() {
       {mySets.map(set => {
         const showDayHeader = set.day !== lastDay
         lastDay = set.day
-        const playing = isNowPlaying(now, set.day, set.start_time, set.end_time)
+        const playing = set.start_time && set.end_time
+          ? isNowPlaying(now, set.day, set.start_time, set.end_time)
+          : false
 
         return (
           <div key={set.id}>
             {showDayHeader && (
               <div className="font-mono text-xs text-text-secondary uppercase tracking-wider pt-3 pb-1 border-b border-border mb-2">
-                {set.day === '2026-05-16' ? 'Saturday 16 May' : 'Sunday 17 May'}
+                {formatDayLabel(set.day)}
               </div>
             )}
             <SetCard

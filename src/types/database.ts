@@ -5,6 +5,7 @@ export type Festival = {
   location: string | null
   start_date: string
   end_date: string
+  timetable_announced: boolean
   created_at: string
 }
 
@@ -18,17 +19,17 @@ export type Stage = {
 export type FestivalSet = {
   id: string
   festival_id: string
-  stage_id: string
+  stage_id: string | null
   artist_name: string
   day: string
-  start_time: string
-  end_time: string
+  start_time: string | null
+  end_time: string | null
   is_live: boolean
   awakenings_url: string | null
 }
 
 export type SetWithStage = FestivalSet & {
-  stages: { name: string; sort_order: number }
+  stages: { name: string; sort_order: number } | null
 }
 
 export type UserPlan = {
