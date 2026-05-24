@@ -46,3 +46,19 @@ export type UserRating = {
   rating: -1 | 1
   created_at: string
 }
+
+export type Artist = {
+  id: string
+  name: string
+  sort_name: string
+  is_collective: boolean
+  created_at: string
+}
+
+export type SetArtist = {
+  id: string
+  set_id: string
+  artist_id: string
+  role: 'solo' | 'b2b' | 'f2f' | 'collab' | 'vs' | 'member'
+  billing_order: number
+}

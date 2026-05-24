@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=festival-pulse",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "parse-artists": "tsx --env-file=.env.local scripts/parse-artists.ts"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.8",
@@ -33,6 +34,7 @@
     "globals": "^17.6.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12",
