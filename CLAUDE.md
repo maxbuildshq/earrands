@@ -77,7 +77,15 @@ src/
     AuthGuard.tsx
   contexts/AuthContext.tsx
 scripts/
-  parse-artists.ts                 # Artist normalization script (run manually)
+  ingest.ts                        # Ingest pipeline: scrape → diff → SQL
+  parse-artists.ts                 # Artist normalization (standalone fallback)
+  lib/
+    artist-parser.ts               # Shared artist name parsing logic
+  scrapers/
+    types.ts                       # ScrapedData intermediate JSON schema
+    base.ts                        # Playwright/cheerio helpers, time parsing
+    index.ts                       # Adapter registry (URL pattern → scraper)
+    awakenings.ts                  # Awakenings adapter (all their festivals)
 supabase/
   migrations/                      # Sequential SQL files — run in Supabase SQL Editor
 ```
@@ -115,9 +123,11 @@ user_ratings id, user_id, set_id, rating(-1|1), created_at
 - `005_artist_normalization.sql` — adds:
 
 ```sql
-artists     id, name, sort_name (unique, lowercase), is_collective, created_at
+artists     id, name, sort_name (unique, lowercase), is_collective, bio, source_url, created_at
 set_artists id, set_id, artist_id, role (solo|b2b|f2f|collab|vs|member), billing_order
 ```
+
+- `006_ingest_support.sql` — adds `bio` and `source_url` to `artists`; unique constraints on `stages(festival_id, name)` and `sets(festival_id, artist_name, day)` for upsert support
 
 ### RLS summary
 
@@ -144,7 +154,25 @@ set_artists id, set_id, artist_id, role (solo|b2b|f2f|collab|vs|member), billing
 
 ## Key Patterns
 
-### Adding a new festival
+### Adding a new festival (automated ingest)
+
+For festivals with a scraper adapter (currently: Awakenings):
+
+```bash
+npm run ingest -- --url=<festival-event-url>              # scrape, diff, generate SQL
+npm run ingest -- --url=<url> --dry-run                   # preview diff only
+npm run ingest -- --url=<url> --skip-bios                 # skip fetching artist bios
+```
+
+The ingest script: scrapes the page → compares against current DB state → shows a diff preview → generates a complete upsert SQL file (festival, stages, sets, artists, set_artists) at `supabase/migrations/`. Run the SQL in Supabase SQL Editor.
+
+For festivals without an adapter, extract data as JSON matching the `ScrapedData` schema (see `scripts/scrapers/types.ts`) and use:
+
+```bash
+npm run ingest -- --json=scraped/some-festival.json
+```
+
+### Adding a new festival (manual fallback)
 
 1. Write `supabase/migrations/00X_festivalname.sql` — insert festival, stages, sets
 2. Run in Supabase SQL Editor
@@ -193,7 +221,7 @@ VITE_SUPABASE_ANON_KEY=<your Supabase anon key>
 SUPABASE_SERVICE_ROLE_KEY=<your Supabase service role key — Project Settings → API → Reveal>
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` is only needed for `npm run parse-artists` — never used in the browser app.
+`SUPABASE_SERVICE_ROLE_KEY` is needed for `npm run ingest` and `npm run parse-artists` — never used in the browser app.
 
 ---
 
@@ -203,6 +231,10 @@ SUPABASE_SERVICE_ROLE_KEY=<your Supabase service role key — Project Settings �
 npm run dev             # Local dev server
 npm run build           # tsc + vite build → dist/
 npm run deploy          # build + deploy to Cloudflare
+npm run ingest -- --url=<url>               # Scrape festival → diff → generate SQL
+npm run ingest -- --url=<url> --dry-run     # Preview diff only
+npm run ingest -- --url=<url> --skip-bios   # Skip artist bio fetching
+npm run ingest -- --json=<path>             # Ingest from pre-scraped JSON
 npm run parse-artists   # Populate artists/set_artists from sets.artist_name
 npm run parse-artists -- --festival=slug    # One festival only
 npm run parse-artists -- --dry-run          # Preview, no DB writes
@@ -235,7 +267,7 @@ Cloudflare env vars needed: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (set i
 
 ## Artist Normalization
 
-The `scripts/parse-artists.ts` script splits multi-artist `sets.artist_name` strings into individual `artists` records linked via `set_artists`. Safe to re-run (idempotent — uses ON CONFLICT DO NOTHING).
+Parsing logic lives in `scripts/lib/artist-parser.ts` (shared by both `ingest.ts` and `parse-artists.ts`).
 
 Parsing rules (priority order):
 1. Colon format → `"LSD: Luke Slater, Steve Bicknell and Function"`
@@ -247,6 +279,43 @@ Parsing rules (priority order):
 7. ` & `
 8. Solo
 
+The `ingest.ts` script runs this parsing inline and includes artist + set_artist upserts in the generated SQL. The standalone `parse-artists.ts` remains as a fallback for re-parsing all artists globally.
+
+---
+
+## Ingest Pipeline
+
+### Architecture
+
+```
+Scraper adapters (per-festival)  →  ScrapedData JSON  →  ingest.ts  →  SQL migration
+                                                              ↕
+                                                     Supabase (current state)
+```
+
+### Scraper adapters
+
+Each adapter is a function `(url: string) => Promise<ScrapedData>` in `scripts/scrapers/`. The adapter registry in `scripts/scrapers/index.ts` maps URL patterns to adapters.
+
+Current adapters:
+- **Awakenings** (`awakenings.com`) — works for all Awakenings events (Upclose, Festival, ADE, Easter, Monegros)
+
+### Adding a new adapter
+
+1. Create `scripts/scrapers/<name>.ts` exporting a `ScraperAdapter` function
+2. Register it in `scripts/scrapers/index.ts` with a URL pattern
+3. The adapter must return `ScrapedData` (see `scripts/scrapers/types.ts`)
+
+### LLM extraction (no adapter)
+
+For one-off festivals without an adapter, extract data in Claude Code as JSON matching the `ScrapedData` schema, save to a file, and use `npm run ingest -- --json=<path>`.
+
+### Artist bios
+
+- Bio enrichment is optional — adapters can populate the `artists` array with bios from festival artist pages
+- Bios use "keep longest" logic: a longer bio from a new source replaces a shorter existing one
+- `--skip-bios` flag skips fetching artist pages (faster scraping)
+
 ---
 
 ## Planned / Not Yet Built
@@ -254,4 +323,4 @@ Parsing rules (priority order):
 - Artist detail page (`/artists/:slug`) showing all sets across festivals
 - `useArtistSets(artistId)` hook
 - Clickable artist names in SetCard
-- Dekmantel festival data (user to provide screenshots)
+- Additional scraper adapters (Verknipt, Dekmantel, etc.)

@@ -9,7 +9,8 @@
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=festival-pulse",
     "lint": "eslint .",
     "preview": "vite preview",
-    "parse-artists": "tsx --env-file=.env.local scripts/parse-artists.ts"
+    "parse-artists": "tsx --env-file=.env.local scripts/parse-artists.ts",
+    "ingest": "tsx --env-file=.env.local scripts/ingest.ts"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.8",
@@ -26,14 +27,18 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.0",
+    "@types/cheerio": "^0.22.35",
     "@types/node": "^24.12.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "chalk": "^5.6.2",
+    "cheerio": "^1.2.0",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "playwright": "^1.60.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.3",

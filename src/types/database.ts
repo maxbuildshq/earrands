@@ -52,6 +52,8 @@ export type Artist = {
   name: string
   sort_name: string
   is_collective: boolean
+  bio: string | null
+  source_url: string | null
   created_at: string
 }
 

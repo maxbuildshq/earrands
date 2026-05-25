@@ -15,6 +15,9 @@
  * Get it from: Supabase dashboard → Project Settings → API → service_role → Reveal
  */
 import { createClient } from '@supabase/supabase-js'
+import { parseArtistName, type Role } from './lib/artist-parser.js'
+
+export { parseArtistName }
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -43,94 +46,6 @@ if (!url || !serviceKey) {
 const supabase = createClient(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
-
-// ── Artist name parser ────────────────────────────────────────────────────────
-
-type Role = 'solo' | 'b2b' | 'f2f' | 'collab' | 'vs' | 'member'
-
-type ParseResult = {
-  collective: string | null  // e.g. "Collabs 3000", "LSD"
-  members: string[]          // individual artist names
-  role: Role
-}
-
-/**
- * Split a raw artist_name string into individual artists.
- *
- * Patterns detected (in priority order):
- *  1. Colon format       "LSD: Luke Slater, Steve Bicknell and Function"  → member
- *  2. Parenthetical      "Collabs 3000 (Chris Liebing & Speedy J)"         → member
- *  3. F2F                "DJ IP F2F Dr. G"                                 → f2f
- *  4. B2B                "SLVL B2B USH"                                    → b2b
- *  5. vs                 "Shed vs Head High"                               → vs
- *  6. x (space-x-space)  "Fjaak x KiNK"  (won't match "DAX J")            → collab
- *  7. &                  "Alarico & Ben Klock"                             → collab
- *  8. Solo               "Adam Beyer"                                      → solo
- */
-export function parseArtistName(raw: string): ParseResult {
-  let name = raw.trim()
-
-  // Strip "(live)" suffix — performance type is already on sets.is_live
-  name = name.replace(/\s*\(live\)$/i, '').trim()
-
-  // 1. Colon format: collective name before colon, members after
-  const colonIdx = name.indexOf(':')
-  if (colonIdx > 0 && colonIdx <= name.length / 2) {
-    const collective = name.slice(0, colonIdx).trim()
-    const remainder = name.slice(colonIdx + 1).trim()
-    const members = remainder
-      .replace(/ and /g, ', ')
-      .split(', ')
-      .map(s => s.trim())
-      .filter(Boolean)
-    return { collective, members, role: 'member' }
-  }
-
-  // 2. Parenthetical with , or & = member list
-  const parenMatch = name.match(/^(.+?)\s*\((.+)\)$/)
-  if (parenMatch && /[,&]/.test(parenMatch[2])) {
-    const collective = parenMatch[1].trim()
-    const members = parenMatch[2]
-      .replace(/ & /g, ', ')
-      .split(', ')
-      .map(s => s.trim())
-      .filter(Boolean)
-    return { collective, members, role: 'member' }
-  }
-
-  // 3. F2F — case-insensitive
-  if (/ f2f /i.test(name)) {
-    const members = name.split(/ f2f /i).map(s => s.trim())
-    return { collective: null, members, role: 'f2f' }
-  }
-
-  // 4. B2B — case-insensitive
-  if (/ b2b /i.test(name)) {
-    const members = name.split(/ b2b /i).map(s => s.trim())
-    return { collective: null, members, role: 'b2b' }
-  }
-
-  // 5. "vs" — exact (lowercase only)
-  if (name.includes(' vs ')) {
-    const members = name.split(' vs ').map(s => s.trim())
-    return { collective: null, members, role: 'vs' }
-  }
-
-  // 6. " x " — case-sensitive space-x-space (won't match "DAX J" or "Toxic Machinery")
-  if (name.includes(' x ')) {
-    const members = name.split(' x ').map(s => s.trim())
-    return { collective: null, members, role: 'collab' }
-  }
-
-  // 7. " & "
-  if (name.includes(' & ')) {
-    const members = name.split(' & ').map(s => s.trim())
-    return { collective: null, members, role: 'collab' }
-  }
-
-  // 8. Solo
-  return { collective: null, members: [name], role: 'solo' }
-}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
