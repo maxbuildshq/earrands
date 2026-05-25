@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useFestivals } from '../hooks/useFestivalData'
 import type { Festival } from '../types/database'
+import posthog from 'posthog-js'
 
 function formatDateRange(start: string, end: string): string {
   const s = new Date(start + 'T00:00:00')
@@ -64,6 +65,7 @@ function FestivalCard({ festival }: { festival: Festival }) {
   return (
     <Link
       to={`/festivals/${festival.slug}/schedule`}
+      onClick={() => posthog.capture('festival_selected', { festival_slug: festival.slug, festival_name: festival.name, is_past: past })}
       className={`block border border-border p-4 transition-colors hover:border-acid/50 ${
         past ? 'bg-surface-raised/50' : 'bg-surface-raised'
       }`}

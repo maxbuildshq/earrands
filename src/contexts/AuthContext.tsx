@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import posthog from 'posthog-js'
 
 type AuthContextType = {
   user: User | null
@@ -22,6 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
+      if (session?.user) {
+        posthog.identify(session.user.id, { email: session.user.email })
+      }
       setLoading(false)
     })
 
@@ -45,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut()
+    posthog.capture('user_signed_out')
+    posthog.reset()
   }
 
   return (

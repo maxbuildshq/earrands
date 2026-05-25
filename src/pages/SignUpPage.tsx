@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import posthog from 'posthog-js'
 
 export function SignUpPage() {
   const [email, setEmail] = useState('')
@@ -23,9 +24,11 @@ export function SignUpPage() {
     setLoading(true)
     const { error } = await signUp(email, password)
     if (error) {
+      posthog.captureException(error, { feature: 'signup' })
       setError(error.message)
       setLoading(false)
     } else {
+      posthog.capture('user_signed_up', { email })
       setSuccess(true)
       setLoading(false)
     }

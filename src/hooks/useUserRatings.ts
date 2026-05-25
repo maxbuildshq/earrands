@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import type { UserRating } from '../types/database'
+import posthog from 'posthog-js'
 
 export function useUserRatings() {
   const { user } = useAuth()
@@ -62,6 +63,9 @@ export function useUserRatings() {
       })
 
       return { prev }
+    },
+    onSuccess: (_result, { setId, value }) => {
+      posthog.capture('set_rated', { set_id: setId, rating: value })
     },
     onError: (_err, _vars, context) => {
       if (context?.prev) {

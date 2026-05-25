@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import posthog from 'posthog-js'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -20,9 +21,12 @@ export function LoginPage() {
 
     const { error } = await signIn(email, password)
     if (error) {
+      posthog.captureException(error, { feature: 'login' })
       setError(error.message)
       setLoading(false)
     } else {
+      posthog.identify(email, { email })
+      posthog.capture('user_signed_in')
       navigate(returnTo, { replace: true })
     }
   }

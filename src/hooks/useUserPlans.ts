@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './useAuth'
 import type { UserPlan } from '../types/database'
+import posthog from 'posthog-js'
 
 export function useUserPlans() {
   const { user } = useAuth()
@@ -47,6 +48,9 @@ export function useUserPlans() {
       })
 
       return { prev }
+    },
+    onSuccess: (result) => {
+      posthog.capture('set_plan_toggled', { set_id: result.setId, action: result.action })
     },
     onError: (_err, _setId, context) => {
       if (context?.prev) {
