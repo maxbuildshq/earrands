@@ -1,3 +1,17 @@
+export const AFTER_MIDNIGHT_CUTOFF = '07:00'
+
+export function isAfterMidnight(time: string): boolean {
+  return time < AFTER_MIDNIGHT_CUTOFF
+}
+
+export function toSortableTime(time: string): string {
+  if (isAfterMidnight(time)) {
+    const [h, m] = time.split(':')
+    return `${String(parseInt(h) + 24).padStart(2, '0')}:${m}`
+  }
+  return time
+}
+
 /** Generate array of date strings (YYYY-MM-DD) between start and end inclusive */
 export function getDays(startDate: string, endDate: string): string[] {
   const days: string[] = []

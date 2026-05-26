@@ -25,7 +25,6 @@ export type FestivalSet = {
   start_time: string | null
   end_time: string | null
   is_live: boolean
-  awakenings_url: string | null
 }
 
 export type SetWithStage = FestivalSet & {

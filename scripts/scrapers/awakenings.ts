@@ -102,9 +102,16 @@ export async function scrapeAwakenings(url: string): Promise<ScrapedData> {
   // Festival metadata
   const rawTitle = $('.layoutItem__title').first().text().replace(/\s+/g, ' ').trim()
   const subtitle = $('.layoutItem__subtitle').first().text().trim()
-  // Title is e.g. "Upclose 2026 Awakenings" — we want "Awakenings Upclose 2026"
-  const titleWithoutBrand = rawTitle.replace(new RegExp(`\\s*${subtitle}\\s*`, 'i'), '').trim()
-  const festivalName = subtitle ? `${subtitle} ${titleWithoutBrand}` : rawTitle
+  // Subtitle is either the brand ("Awakenings") or the year ("2026").
+  // Brand: remove from title, prepend → "Awakenings Upclose 2026"
+  // Year: rawTitle already has everything in correct order → "Awakenings Festival 2026"
+  let festivalName: string
+  if (!subtitle || /^\d{4}$/.test(subtitle)) {
+    festivalName = rawTitle
+  } else {
+    const titleWithoutBrand = rawTitle.replace(new RegExp(`\\s*${subtitle}\\s*`, 'i'), '').trim()
+    festivalName = `${subtitle} ${titleWithoutBrand}`
+  }
 
   const dateText = $('.layoutItem__date').first().text().replace(/\s+/g, ' ').trim()
   const { start_date, end_date } = parseFestivalDates(dateText)
@@ -176,6 +183,16 @@ export async function scrapeAwakenings(url: string): Promise<ScrapedData> {
       })
     })
   })
+
+  // Sort after-party stages last (they may appear before regular stages that only exist on later days)
+  const isAfterParty = (name: string) => /after|camping/i.test(name)
+  stages.sort((a, b) => {
+    const aAfter = isAfterParty(a.name) ? 1 : 0
+    const bAfter = isAfterParty(b.name) ? 1 : 0
+    if (aAfter !== bAfter) return aAfter - bAfter
+    return a.sort_order - b.sort_order
+  })
+  stages.forEach((s, i) => { s.sort_order = i + 1 })
 
   // Handle lineup-only if no timetable blocks found
   if (timetableBlocks.length === 0) {

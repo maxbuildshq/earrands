@@ -9,7 +9,7 @@ import { DayToggle } from '../components/schedule/DayToggle'
 import { StageFilter } from '../components/schedule/StageFilter'
 import { SetCard } from '../components/schedule/SetCard'
 import { LineupView } from '../components/schedule/LineupView'
-import { getDays } from '../lib/dates'
+import { getDays, toSortableTime, isAfterMidnight } from '../lib/dates'
 
 export function SchedulePage() {
   const { slug } = useParams<{ slug: string }>()
@@ -47,7 +47,7 @@ export function SchedulePage() {
       .filter(s => s.stage_id && selectedStages.has(s.stage_id))
       .sort((a, b) => {
         if (!a.start_time || !b.start_time) return 0
-        return a.start_time.localeCompare(b.start_time) || (a.stages?.sort_order ?? 0) - (b.stages?.sort_order ?? 0)
+        return toSortableTime(a.start_time).localeCompare(toSortableTime(b.start_time)) || (a.stages?.sort_order ?? 0) - (b.stages?.sort_order ?? 0)
       })
   }, [sets, selectedDay, selectedStages])
 
@@ -112,20 +112,32 @@ export function SchedulePage() {
       />
 
       <div className="space-y-2 mt-2">
-        {filteredSets.map(set => {
+        {filteredSets.map((set, idx) => {
           const playing = set.start_time && set.end_time
             ? isNowPlaying(now, set.day, set.start_time, set.end_time)
             : false
+          const prev = idx > 0 ? filteredSets[idx - 1] : null
+          const showDivider = set.start_time && isAfterMidnight(set.start_time)
+            && prev?.start_time && !isAfterMidnight(prev.start_time)
           return (
-            <div key={set.id} ref={playing ? nowRef : undefined}>
-              <SetCard
-                set={set}
-                isNow={playing}
-                isGoing={user ? isGoing(set.id) : false}
-                rating={user ? getRating(set.id) : null}
-                onToggleGoing={() => toggleGoing(set.id)}
-                onRate={(v) => setRating(set.id, v)}
-              />
+            <div key={set.id}>
+              {showDivider && (
+                <div className="flex items-center gap-3 py-3 mt-2">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="font-mono text-xs tracking-widest text-text-secondary">AFTER MIDNIGHT</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
+              <div ref={playing ? nowRef : undefined}>
+                <SetCard
+                  set={set}
+                  isNow={playing}
+                  isGoing={user ? isGoing(set.id) : false}
+                  rating={user ? getRating(set.id) : null}
+                  onToggleGoing={() => toggleGoing(set.id)}
+                  onRate={(v) => setRating(set.id, v)}
+                />
+              </div>
             </div>
           )
         })}

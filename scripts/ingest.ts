@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline'
 import { findAdapter } from './scrapers/index.js'
 import { closeBrowser } from './scrapers/base.js'
 import { parseArtistName } from './lib/artist-parser.js'
-import type { ScrapedData } from './scrapers/types.js'
+import type { ScrapedData, ScrapedSet } from './scrapers/types.js'
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -114,27 +114,54 @@ async function fetchCurrentState(slug: string): Promise<DbState> {
 // ── Step 3: Compute diff ─────────────────────────────────────────────────────
 
 type DiffEntry = {
-  type: 'added' | 'removed' | 'changed'
+  type: 'added' | 'removed' | 'changed' | 'rescheduled'
   category: string
   label: string
   details?: string
 }
 
+type ExistingSetInfo = {
+  artist_name: string
+  day: string
+  stage_name: string | null
+  start_time: string | null
+  end_time: string | null
+  is_live: boolean
+}
+
+type SetDiff = {
+  added: ScrapedSet[]
+  removed: ExistingSetInfo[]
+  updated: Array<{ scraped: ScrapedSet; existing: ExistingSetInfo; changes: string[] }>
+  rescheduled: Array<{ scraped: ScrapedSet; existing: ExistingSetInfo }>
+  unchanged: ScrapedSet[]
+}
+
 function normalizeTime(t: string | null): string | null {
   if (!t) return null
-  return t.replace(/^(\d{1,2}:\d{2}):\d{2}$/, '$1') // "13:00:00" → "13:00", "13:00" unchanged
+  return t.replace(/^(\d{1,2}:\d{2}):\d{2}$/, '$1')
 }
 
 function normalizeText(t: string): string {
-  return t.replace(/[‘’′]/g, "'").replace(/[“”]/g, '"')
+  return t.normalize('NFC').replace(/[''′]/g, "'").replace(/[""]/g, '"')
 }
 
-function computeDiff(scraped: ScrapedData, current: DbState): DiffEntry[] {
-  const diff: DiffEntry[] = []
+function setKey(artistName: string, day: string, stage: string | null): string {
+  return `${normalizeText(artistName)}|${day}|${stage ?? ''}`
+}
+
+type DiffResult = {
+  entries: DiffEntry[]
+  setDiff: SetDiff
+}
+
+function computeDiff(scraped: ScrapedData, current: DbState): DiffResult {
+  const entries: DiffEntry[] = []
+  const setDiff: SetDiff = { added: [], removed: [], updated: [], rescheduled: [], unchanged: [] }
 
   // Festival
   if (!current.festival) {
-    diff.push({ type: 'added', category: 'festival', label: scraped.festival.name })
+    entries.push({ type: 'added', category: 'festival', label: scraped.festival.name })
   } else {
     const f = current.festival
     const s = scraped.festival
@@ -145,7 +172,7 @@ function computeDiff(scraped: ScrapedData, current: DbState): DiffEntry[] {
     if (f.end_date !== s.end_date) changes.push(`end_date: ${f.end_date} → ${s.end_date}`)
     if (f.timetable_announced !== s.timetable_announced) changes.push(`timetable: ${f.timetable_announced} → ${s.timetable_announced}`)
     if (changes.length > 0) {
-      diff.push({ type: 'changed', category: 'festival', label: s.name, details: changes.join(', ') })
+      entries.push({ type: 'changed', category: 'festival', label: s.name, details: changes.join(', ') })
     }
   }
 
@@ -155,51 +182,135 @@ function computeDiff(scraped: ScrapedData, current: DbState): DiffEntry[] {
 
   for (const stage of scraped.stages) {
     if (!currentStageNames.has(stage.name)) {
-      diff.push({ type: 'added', category: 'stage', label: stage.name })
+      entries.push({ type: 'added', category: 'stage', label: stage.name })
     }
   }
   for (const stage of current.stages) {
     if (!scrapedStageNames.has(stage.name)) {
-      diff.push({ type: 'removed', category: 'stage', label: stage.name })
+      entries.push({ type: 'removed', category: 'stage', label: stage.name })
     }
   }
 
-  // Sets — match by stage + day + start_time (timetable) or artist_name + day (lineup-only)
+  // Sets — two-pass matching by (artist_name, day, stage)
   const stageIdToName = new Map(current.stages.map(s => [s.id, s.name]))
 
-  function setKey(artistName: string, day: string, stage: string | null, startTime: string | null): string {
-    if (stage && startTime) {
-      return `${stage}|${day}|${normalizeTime(startTime)}`
+  function resolveExisting(s: DbState['sets'][0]): ExistingSetInfo {
+    return {
+      artist_name: s.artist_name,
+      day: s.day,
+      stage_name: stageIdToName.get(s.stage_id ?? '') ?? null,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      is_live: s.is_live,
     }
-    return `${normalizeText(artistName)}|${day}`
   }
 
-  const currentSetKeys = new Map(current.sets.map(s =>
-    [setKey(s.artist_name, s.day, stageIdToName.get(s.stage_id ?? '') ?? null, s.start_time), s]
-  ))
-  const scrapedSetKeys = new Set<string>()
+  const currentSetKeys = new Map<string, ExistingSetInfo>()
+  for (const s of current.sets) {
+    const info = resolveExisting(s)
+    currentSetKeys.set(setKey(s.artist_name, s.day, info.stage_name), info)
+  }
 
-  for (const set of scraped.sets) {
-    const key = setKey(set.artist_name, set.day, set.stage, set.start_time)
-    scrapedSetKeys.add(key)
+  // Pass 1: exact match by (artist_name, day, stage)
+  const matchedScrapedIdx = new Set<number>()
+  const matchedExistingKeys = new Set<string>()
+
+  for (let i = 0; i < scraped.sets.length; i++) {
+    const set = scraped.sets[i]
+    const key = setKey(set.artist_name, set.day, set.stage)
     const existing = currentSetKeys.get(key)
-    if (!existing) {
-      diff.push({ type: 'added', category: 'set', label: `${set.artist_name} (${set.day})`, details: set.stage ? `${set.stage} ${set.start_time}-${set.end_time}` : undefined })
+    if (!existing) continue
+
+    matchedScrapedIdx.add(i)
+    matchedExistingKeys.add(key)
+
+    const changes: string[] = []
+    if (normalizeTime(set.start_time) !== normalizeTime(existing.start_time))
+      changes.push(`start: ${existing.start_time ?? 'null'} → ${set.start_time ?? 'null'}`)
+    if (normalizeTime(set.end_time) !== normalizeTime(existing.end_time))
+      changes.push(`end: ${existing.end_time ?? 'null'} → ${set.end_time ?? 'null'}`)
+    if (set.is_live !== existing.is_live)
+      changes.push(`live: ${existing.is_live} → ${set.is_live}`)
+
+    if (changes.length > 0) {
+      setDiff.updated.push({ scraped: set, existing, changes })
+      entries.push({ type: 'changed', category: 'set', label: `${set.artist_name} (${set.day})`, details: changes.join(', ') })
     } else {
-      const changes: string[] = []
-      if (normalizeText(set.artist_name) !== normalizeText(existing.artist_name)) changes.push(`artist: "${existing.artist_name}" → "${set.artist_name}"`)
-      if (normalizeTime(set.end_time) !== normalizeTime(existing.end_time)) changes.push(`end: ${existing.end_time} → ${set.end_time}`)
-      if (set.is_live !== existing.is_live) changes.push(`live: ${existing.is_live} → ${set.is_live}`)
-      if (changes.length > 0) {
-        diff.push({ type: 'changed', category: 'set', label: `${set.artist_name} (${set.day})`, details: changes.join(', ') })
-      }
+      setDiff.unchanged.push(set)
     }
   }
 
-  for (const [key, set] of currentSetKeys) {
-    if (!scrapedSetKeys.has(key)) {
-      diff.push({ type: 'removed', category: 'set', label: `${set.artist_name} (${set.day})` })
+  // Collect unmatched
+  const unmatchedScraped = scraped.sets.filter((_, i) => !matchedScrapedIdx.has(i))
+  const unmatchedExisting: ExistingSetInfo[] = []
+  for (const [key, info] of currentSetKeys) {
+    if (!matchedExistingKeys.has(key)) unmatchedExisting.push(info)
+  }
+
+  // Pass 2: reschedule detection — match by artist_name alone
+  const unmatchedScrapedByArtist = new Map<string, ScrapedSet[]>()
+  for (const set of unmatchedScraped) {
+    const k = normalizeText(set.artist_name).toLowerCase()
+    const list = unmatchedScrapedByArtist.get(k) ?? []
+    list.push(set)
+    unmatchedScrapedByArtist.set(k, list)
+  }
+
+  const unmatchedExistingByArtist = new Map<string, ExistingSetInfo[]>()
+  for (const set of unmatchedExisting) {
+    const k = normalizeText(set.artist_name).toLowerCase()
+    const list = unmatchedExistingByArtist.get(k) ?? []
+    list.push(set)
+    unmatchedExistingByArtist.set(k, list)
+  }
+
+  const rescheduledScraped = new Set<ScrapedSet>()
+  const rescheduledExisting = new Set<ExistingSetInfo>()
+
+  for (const [artistKey, scrapedSets] of unmatchedScrapedByArtist) {
+    const existingSets = unmatchedExistingByArtist.get(artistKey)
+    if (!existingSets) continue
+    // Only auto-pair when unambiguous (1:1 match)
+    if (scrapedSets.length === 1 && existingSets.length === 1) {
+      const s = scrapedSets[0]
+      const e = existingSets[0]
+      setDiff.rescheduled.push({ scraped: s, existing: e })
+      rescheduledScraped.add(s)
+      rescheduledExisting.add(e)
+
+      const parts: string[] = []
+      if (e.day !== s.day) parts.push(`${e.day} → ${s.day}`)
+      if (e.stage_name !== s.stage) parts.push(`${e.stage_name ?? 'no stage'} → ${s.stage ?? 'no stage'}`)
+      if (normalizeTime(e.start_time) !== normalizeTime(s.start_time))
+        parts.push(`${e.start_time ?? 'null'} → ${s.start_time ?? 'null'}`)
+      entries.push({
+        type: 'rescheduled',
+        category: 'set',
+        label: s.artist_name,
+        details: parts.join(', '),
+      })
     }
+  }
+
+  // Remaining unmatched → added / removed
+  for (const set of unmatchedScraped) {
+    if (rescheduledScraped.has(set)) continue
+    setDiff.added.push(set)
+    entries.push({
+      type: 'added',
+      category: 'set',
+      label: `${set.artist_name} (${set.day})`,
+      details: set.stage ? `${set.stage} ${set.start_time ?? '?'}-${set.end_time ?? '?'}` : undefined,
+    })
+  }
+  for (const set of unmatchedExisting) {
+    if (rescheduledExisting.has(set)) continue
+    setDiff.removed.push(set)
+    entries.push({
+      type: 'removed',
+      category: 'set',
+      label: `${set.artist_name} (${set.day})`,
+    })
   }
 
   // Artists — bio updates
@@ -208,22 +319,46 @@ function computeDiff(scraped: ScrapedData, current: DbState): DiffEntry[] {
     if (!artist.bio) continue
     const existing = currentArtistBios.get(artist.name.toLowerCase())
     if (!existing) {
-      diff.push({ type: 'added', category: 'artist bio', label: artist.name, details: `${artist.bio.length} chars` })
+      entries.push({ type: 'added', category: 'artist bio', label: artist.name, details: `${artist.bio.length} chars` })
     } else if (!existing.bio || artist.bio.length > existing.bio.length) {
-      diff.push({ type: 'changed', category: 'artist bio', label: artist.name, details: `${existing.bio?.length ?? 0} → ${artist.bio.length} chars` })
+      entries.push({ type: 'changed', category: 'artist bio', label: artist.name, details: `${existing.bio?.length ?? 0} → ${artist.bio.length} chars` })
     }
   }
 
-  return diff
+  return { entries, setDiff }
 }
 
-type Warning = {
-  level: 'info' | 'warn'
+// ── Warnings & Flags ────────────────────────────────────────────────────────
+
+type Flag = {
+  level: 'reschedule' | 'removal' | 'warn' | 'info'
   message: string
 }
 
-function computeWarnings(scraped: ScrapedData): Warning[] {
-  const warnings: Warning[] = []
+function computeFlags(scraped: ScrapedData, setDiff: SetDiff): Flag[] {
+  const flags: Flag[] = []
+
+  // Reschedules (most impactful — set IDs reused, user_plans move with them)
+  for (const r of setDiff.rescheduled) {
+    const parts: string[] = []
+    if (r.existing.day !== r.scraped.day) parts.push(`${r.existing.day} → ${r.scraped.day}`)
+    if (r.existing.stage_name !== r.scraped.stage) parts.push(`${r.existing.stage_name ?? 'no stage'} → ${r.scraped.stage ?? 'no stage'}`)
+    if (normalizeTime(r.existing.start_time) !== normalizeTime(r.scraped.start_time))
+      parts.push(`${r.existing.start_time ?? 'no time'} → ${r.scraped.start_time ?? 'no time'}`)
+    flags.push({
+      level: 'reschedule',
+      message: `${r.scraped.artist_name} moved ${parts.join(', ')}`,
+    })
+  }
+
+  // Removed sets (user data will be lost via cascade)
+  for (const r of setDiff.removed) {
+    const loc = [r.stage_name, r.day, r.start_time].filter(Boolean).join(' ')
+    flags.push({
+      level: 'removal',
+      message: `${r.artist_name} (${loc}) — will delete user_plans`,
+    })
+  }
 
   // Multi-artist sets where individual artists lack source URLs
   const artistUrlMap = new Map(scraped.artists.map(a => [a.name.toLowerCase(), a.source_url]))
@@ -233,7 +368,7 @@ function computeWarnings(scraped: ScrapedData): Warning[] {
 
     const missing = parsed.members.filter(m => !artistUrlMap.has(m.toLowerCase()))
     if (missing.length > 0) {
-      warnings.push({
+      flags.push({
         level: 'warn',
         message: `"${set.artist_name}" — combined link on source site, parsed artists ${missing.map(m => `"${m}"`).join(', ')} have no individual source URL`,
       })
@@ -244,7 +379,7 @@ function computeWarnings(scraped: ScrapedData): Warning[] {
   const noBio = scraped.artists.filter(a => !a.bio)
   if (noBio.length > 0 && scraped.artists.length > 0) {
     const withBio = scraped.artists.filter(a => a.bio).length
-    warnings.push({
+    flags.push({
       level: 'info',
       message: `${withBio}/${scraped.artists.length} artists have bios; ${noBio.length} artist pages had no bio text`,
     })
@@ -254,7 +389,7 @@ function computeWarnings(scraped: ScrapedData): Warning[] {
   if (scraped.festival.timetable_announced) {
     const noTimes = scraped.sets.filter(s => !s.start_time)
     if (noTimes.length > 0) {
-      warnings.push({
+      flags.push({
         level: 'warn',
         message: `Festival marked as timetable_announced but ${noTimes.length} sets have no start_time`,
       })
@@ -274,26 +409,14 @@ function computeWarnings(scraped: ScrapedData): Warning[] {
   }
   for (const [, names] of nameCounts) {
     if (names.length > 1) {
-      warnings.push({
+      flags.push({
         level: 'warn',
         message: `Inconsistent casing: ${names.map(n => `"${n}"`).join(' vs ')} — will be stored as "${names[0]}"`,
       })
     }
   }
 
-  return warnings
-}
-
-function printWarnings(warnings: Warning[]): void {
-  if (warnings.length === 0) return
-
-  console.log(chalk.bold(`\n  WARNINGS (${warnings.length}):\n`))
-  for (const w of warnings) {
-    const icon = w.level === 'warn' ? chalk.yellow('!') : chalk.blue('i')
-    const text = w.level === 'warn' ? chalk.yellow(w.message) : chalk.dim(w.message)
-    console.log(`    ${icon} ${text}`)
-  }
-  console.log()
+  return flags
 }
 
 function printDiff(diff: DiffEntry[]): void {
@@ -311,20 +434,51 @@ function printDiff(diff: DiffEntry[]): void {
     byCategory.set(entry.category, list)
   }
 
-  for (const [category, entries] of byCategory) {
+  for (const [category, catEntries] of byCategory) {
     console.log(chalk.bold(`  ${category.toUpperCase()}`))
-    for (const entry of entries) {
-      const icon = entry.type === 'added' ? chalk.green('+')
-        : entry.type === 'removed' ? chalk.red('-')
-        : chalk.yellow('~')
-      const label = entry.type === 'added' ? chalk.green(entry.label)
-        : entry.type === 'removed' ? chalk.red(entry.label)
-        : chalk.yellow(entry.label)
+    for (const entry of catEntries) {
+      let icon: string, label: string
+      if (entry.type === 'added') {
+        icon = chalk.green('+'); label = chalk.green(entry.label)
+      } else if (entry.type === 'removed') {
+        icon = chalk.red('-'); label = chalk.red(entry.label)
+      } else if (entry.type === 'rescheduled') {
+        icon = chalk.magenta('↻'); label = chalk.magenta(entry.label)
+      } else {
+        icon = chalk.yellow('~'); label = chalk.yellow(entry.label)
+      }
       const details = entry.details ? chalk.dim(` (${entry.details})`) : ''
       console.log(`    ${icon} ${label}${details}`)
     }
     console.log()
   }
+}
+
+function printFlags(flags: Flag[]): void {
+  if (flags.length === 0) return
+
+  const reschedules = flags.filter(f => f.level === 'reschedule').length
+  const removals = flags.filter(f => f.level === 'removal').length
+  const warnings = flags.filter(f => f.level === 'warn' || f.level === 'info').length
+
+  const counts: string[] = []
+  if (reschedules > 0) counts.push(`${reschedules} reschedule${reschedules > 1 ? 's' : ''}`)
+  if (removals > 0) counts.push(`${removals} removal${removals > 1 ? 's' : ''}`)
+  if (warnings > 0) counts.push(`${warnings} warning${warnings > 1 ? 's' : ''}`)
+
+  console.log(chalk.bold(`\n  FLAGS (${counts.join(', ')}):\n`))
+  for (const f of flags) {
+    if (f.level === 'reschedule') {
+      console.log(`    ${chalk.magenta('⚠ RESCHEDULE:')} ${chalk.magenta(f.message)}`)
+    } else if (f.level === 'removal') {
+      console.log(`    ${chalk.red('✕ REMOVED:')} ${chalk.red(f.message)}`)
+    } else if (f.level === 'warn') {
+      console.log(`    ${chalk.yellow('!')} ${chalk.yellow(f.message)}`)
+    } else {
+      console.log(`    ${chalk.blue('i')} ${chalk.dim(f.message)}`)
+    }
+  }
+  console.log()
 }
 
 // ── Step 4: Generate SQL ─────────────────────────────────────────────────────
@@ -333,7 +487,17 @@ function escSql(s: string): string {
   return s.replace(/'/g, "''")
 }
 
-function generateSql(scraped: ScrapedData): string {
+function stageWhereFragment(stageName: string | null): string {
+  return stageName
+    ? `stage_id = (stage_ids->>'${escSql(stageName)}')::uuid`
+    : 'stage_id IS NULL'
+}
+
+function existingSetWhere(e: ExistingSetInfo): string {
+  return `festival_id = fest_id AND artist_name = '${escSql(e.artist_name)}' AND day = '${e.day}' AND ${stageWhereFragment(e.stage_name)}`
+}
+
+function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
   const lines: string[] = []
   const slug = scraped.festival.slug
   const f = scraped.festival
@@ -355,7 +519,6 @@ function generateSql(scraped: ScrapedData): string {
   lines.push(`  timetable_announced = EXCLUDED.timetable_announced;`)
   lines.push('')
 
-  // Need festival ID for subsequent inserts
   lines.push(`DO $$ DECLARE fest_id uuid; stage_ids jsonb := '{}'; set_uuid uuid; artist_uuid uuid;`)
   lines.push(`BEGIN`)
   lines.push(`  SELECT id INTO fest_id FROM festivals WHERE slug = '${escSql(slug)}';`)
@@ -370,29 +533,71 @@ function generateSql(scraped: ScrapedData): string {
       lines.push(`  ON CONFLICT (festival_id, name) DO UPDATE SET sort_order = EXCLUDED.sort_order;`)
       lines.push('')
     }
-    // Collect stage IDs into a lookup
     lines.push(`  SELECT jsonb_object_agg(name, id) INTO stage_ids FROM stages WHERE festival_id = fest_id;`)
     lines.push('')
   }
 
-  // Sets
-  if (scraped.sets.length > 0) {
-    lines.push('  -- Sets')
-    for (const set of scraped.sets) {
-      const stageRef = set.stage ? `(stage_ids->>'${escSql(set.stage)}')::uuid` : 'NULL'
-      const startTime = set.start_time ? `'${set.start_time}'` : 'NULL'
-      const endTime = set.end_time ? `'${set.end_time}'` : 'NULL'
-      lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, is_live)`)
-      lines.push(`  VALUES (fest_id, ${stageRef}, '${escSql(set.artist_name)}', '${set.day}', ${startTime}, ${endTime}, ${set.is_live})`)
-      lines.push(`  ON CONFLICT (festival_id, stage_id, day, start_time) DO UPDATE SET`)
-      lines.push(`    artist_name = EXCLUDED.artist_name,`)
-      lines.push(`    end_time = EXCLUDED.end_time,`)
-      lines.push(`    is_live = EXCLUDED.is_live;`)
+  // Clear set_artists (will re-insert below; no user data lost)
+  lines.push('  -- Clear set_artists (re-inserted below; no user-facing data)')
+  lines.push(`  DELETE FROM set_artists WHERE set_id IN (SELECT id FROM sets WHERE festival_id = fest_id);`)
+  lines.push('')
+
+  // Updated sets — time/is_live changes only (preserves set ID → user_plans survive)
+  if (setDiff.updated.length > 0) {
+    lines.push(`  -- Updated sets (${setDiff.updated.length} — preserves set ID)`)
+    for (const { scraped: s, existing: e, changes } of setDiff.updated) {
+      const setClauses: string[] = []
+      if (normalizeTime(s.start_time) !== normalizeTime(e.start_time))
+        setClauses.push(`start_time = ${s.start_time ? `'${s.start_time}'` : 'NULL'}`)
+      if (normalizeTime(s.end_time) !== normalizeTime(e.end_time))
+        setClauses.push(`end_time = ${s.end_time ? `'${s.end_time}'` : 'NULL'}`)
+      if (s.is_live !== e.is_live)
+        setClauses.push(`is_live = ${s.is_live}`)
+      if (setClauses.length > 0) {
+        lines.push(`  -- ${changes.join(', ')}`)
+        lines.push(`  UPDATE sets SET ${setClauses.join(', ')} WHERE ${existingSetWhere(e)};`)
+        lines.push('')
+      }
+    }
+  }
+
+  // Rescheduled sets — day/stage changed (preserves set ID → user_plans move with it)
+  if (setDiff.rescheduled.length > 0) {
+    lines.push(`  -- Rescheduled sets (${setDiff.rescheduled.length} — preserves set ID, user_plans move)`)
+    for (const { scraped: s, existing: e } of setDiff.rescheduled) {
+      const stageRef = s.stage ? `(stage_ids->>'${escSql(s.stage)}')::uuid` : 'NULL'
+      const startTime = s.start_time ? `'${s.start_time}'` : 'NULL'
+      const endTime = s.end_time ? `'${s.end_time}'` : 'NULL'
+      lines.push(`  -- ⚠ RESCHEDULE: was ${e.stage_name ?? 'no stage'} / ${e.day} ${e.start_time ?? ''}`)
+      lines.push(`  UPDATE sets SET day = '${s.day}', stage_id = ${stageRef}, start_time = ${startTime}, end_time = ${endTime}, is_live = ${s.is_live}`)
+      lines.push(`    WHERE ${existingSetWhere(e)};`)
       lines.push('')
     }
   }
 
-  // Artist parsing — inline the parse-artists logic
+  // New sets
+  if (setDiff.added.length > 0) {
+    lines.push(`  -- New sets (${setDiff.added.length})`)
+    for (const set of setDiff.added) {
+      const stageRef = set.stage ? `(stage_ids->>'${escSql(set.stage)}')::uuid` : 'NULL'
+      const startTime = set.start_time ? `'${set.start_time}'` : 'NULL'
+      const endTime = set.end_time ? `'${set.end_time}'` : 'NULL'
+      lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, is_live)`)
+      lines.push(`  VALUES (fest_id, ${stageRef}, '${escSql(set.artist_name)}', '${set.day}', ${startTime}, ${endTime}, ${set.is_live});`)
+      lines.push('')
+    }
+  }
+
+  // Removed sets
+  if (setDiff.removed.length > 0) {
+    lines.push(`  -- Removed sets (${setDiff.removed.length} — cascades user_plans/ratings)`)
+    for (const e of setDiff.removed) {
+      lines.push(`  DELETE FROM sets WHERE ${existingSetWhere(e)};`)
+      lines.push('')
+    }
+  }
+
+  // Artists
   lines.push('  -- Artists (parsed from set artist_name strings)')
   const processedArtists = new Set<string>()
   const scrapedBios = new Map(
@@ -434,15 +639,12 @@ function generateSql(scraped: ScrapedData): string {
     }
   }
 
-  // Set → artist links
+  // Set → artist links (for all current scraped sets)
   lines.push('  -- Set-artist links')
   for (const set of scraped.sets) {
     const parsed = parseArtistName(set.artist_name)
-    const stageRef = set.stage ? `(stage_ids->>'${escSql(set.stage)}')::uuid` : 'NULL'
-
-    const stageRefLookup = set.stage ? `(stage_ids->>'${escSql(set.stage)}')::uuid` : 'NULL'
-    const startTimeLookup = set.start_time ? `'${set.start_time}'` : 'NULL'
-    lines.push(`  SELECT id INTO set_uuid FROM sets WHERE festival_id = fest_id AND stage_id = ${stageRefLookup} AND day = '${set.day}' AND start_time = ${startTimeLookup};`)
+    const setWhere = `festival_id = fest_id AND artist_name = '${escSql(set.artist_name)}' AND day = '${set.day}' AND ${stageWhereFragment(set.stage)}`
+    lines.push(`  SELECT id INTO set_uuid FROM sets WHERE ${setWhere};`)
 
     if (parsed.collective) {
       const sortName = parsed.collective.toLowerCase().trim()
@@ -498,11 +700,11 @@ async function main() {
       ? `  Found existing festival: ${current.festival.name} (${current.sets.length} sets, ${current.stages.length} stages)`
       : '  Festival not in database yet — full insert')
 
-    // Diff + warnings
-    const diff = computeDiff(scraped, current)
-    const warnings = computeWarnings(scraped)
+    // Diff + flags
+    const { entries: diff, setDiff } = computeDiff(scraped, current)
+    const flags = computeFlags(scraped, setDiff)
     printDiff(diff)
-    printWarnings(warnings)
+    printFlags(flags)
 
     if (diff.length === 0) {
       console.log('No changes detected — nothing to do.')
@@ -521,7 +723,7 @@ async function main() {
       return
     }
 
-    const sql = generateSql(scraped)
+    const sql = generateSql(scraped, setDiff)
     const migrationNum = getNextMigrationNumber()
     const filename = `${migrationNum}_${scraped.festival.slug.replace(/-/g, '_')}.sql`
     const outputPath = `supabase/migrations/${filename}`

@@ -144,9 +144,11 @@ set_artists id, set_id, artist_id, role (solo|b2b|f2f|collab|vs|member), billing
 
 | Festival | Slug | Dates | timetable_announced |
 |----------|------|-------|---------------------|
+| Awakenings Festival 2026 | `awakenings-festival-2026` | Jul 10–12 2026 | true |
 | Awakenings Upclose 2026 | `awakenings-upclose-2026` | May 16–17 2026 | true |
 | 909 Festival 2026 | `909-2026` | Jun 6–7 2026 | false (lineup only) |
 | Verknipt Festival 2026 | `verknipt-2026` | Jun 6–7 2026 | true |
+| Dekmantel 2026 | `dekmantel-2026` | Jul 29–Aug 2 2026 | true |
 
 `SchedulePage` automatically shows `LineupView` when `timetable_announced === false`.
 
@@ -156,7 +158,7 @@ set_artists id, set_id, artist_id, role (solo|b2b|f2f|collab|vs|member), billing
 
 ### Adding a new festival (automated ingest)
 
-For festivals with a scraper adapter (currently: Awakenings):
+For festivals with a scraper adapter (currently: Awakenings, Dekmantel):
 
 ```bash
 npm run ingest -- --url=<festival-event-url>              # scrape, diff, generate SQL
@@ -186,7 +188,18 @@ Set `timetable_announced: false` in the festival row. Omit stage, start_time, en
 
 - `getDays(startDate, endDate)` — returns array of `YYYY-MM-DD` strings
 - `formatDayLabel(dateStr)` — returns `"SAT 6 JUN"` style label
+- `isAfterMidnight(time)` — returns true if time is before `AFTER_MIDNIGHT_CUTOFF` (07:00)
+- `toSortableTime(time)` — adds 24h to after-midnight times so they sort after 23:59
 - **Important:** Always use noon (`T12:00:00`) when constructing Date objects from date strings to avoid UTC timezone shift bugs
+
+### Cross-midnight / after-party sets
+
+The `day` field on sets stores the **festival day** (the day the programming block belongs to), not the calendar day. After-midnight sets (e.g., camping after parties at 00:30–05:00) are stored under the previous festival day.
+
+- **Cutoff:** `AFTER_MIDNIGHT_CUTOFF = '07:00'` in `src/lib/dates.ts`. Times before 07:00 are treated as next calendar day for time computation.
+- **Now Playing** (`useNowPlaying.ts`): `toFestivalDate()` adds 1 day when time < cutoff, so "Friday 00:30" correctly resolves to Saturday 00:30.
+- **Sorting** (`SchedulePage.tsx`): `toSortableTime()` maps "00:30" → "24:30" so after-midnight sets sort after 23:59.
+- **UI divider**: An "AFTER MIDNIGHT" divider appears between the last pre-midnight set and the first after-midnight set on each day.
 
 ### Dynamic day labels
 
@@ -269,15 +282,19 @@ Cloudflare env vars needed: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (set i
 
 Parsing logic lives in `scripts/lib/artist-parser.ts` (shared by both `ingest.ts` and `parse-artists.ts`).
 
+Pre-processing: strips `(live)`, trailing `Live`, and mid-name `Live` before qualifiers like `(` or `w/`.
+
 Parsing rules (priority order):
 1. Colon format → `"LSD: Luke Slater, Steve Bicknell and Function"`
 2. Parenthetical with `,` or `&` → `"Collabs 3000 (Chris Liebing & Speedy J)"`
-3. ` F2F ` (case-insensitive)
-4. ` B2B ` (case-insensitive)
-5. ` vs `
-6. ` x ` (case-sensitive, space-x-space — won't match "DAX J")
-7. ` & `
-8. Solo
+3. ` w/ ` → `"STOOR w/ Aurora Halal, Azu Tiwaline"` (collective + members)
+4. ` featuring ` (case-insensitive) → `"Underground Resistance featuring Saul Williams"`
+5. ` F2F ` (case-insensitive)
+6. ` B2B ` (case-insensitive)
+7. ` vs `
+8. ` x ` (case-sensitive, space-x-space — won't match "DAX J")
+9. ` & `
+10. Solo
 
 The `ingest.ts` script runs this parsing inline and includes artist + set_artist upserts in the generated SQL. The standalone `parse-artists.ts` remains as a fallback for re-parsing all artists globally.
 
@@ -299,6 +316,7 @@ Each adapter is a function `(url: string) => Promise<ScrapedData>` in `scripts/s
 
 Current adapters:
 - **Awakenings** (`awakenings.com`) — works for all Awakenings events (Upclose, Festival, ADE, Easter, Monegros)
+- **Dekmantel** (`dekmantelfestival.com`) — extracts `__NUXT__` payload via Playwright; maps ITC venues and Bos day/dawn to stages
 
 ### Adding a new adapter
 
@@ -323,4 +341,4 @@ For one-off festivals without an adapter, extract data in Claude Code as JSON ma
 - Artist detail page (`/artists/:slug`) showing all sets across festivals
 - `useArtistSets(artistId)` hook
 - Clickable artist names in SetCard
-- Additional scraper adapters (Verknipt, Dekmantel, etc.)
+- Additional scraper adapters (Verknipt, etc.)

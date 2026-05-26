@@ -9,6 +9,8 @@ export type ParseResult = {
 export function parseArtistName(raw: string): ParseResult {
   let name = raw.trim()
   name = name.replace(/\s*\(live\)$/i, '').trim()
+  name = name.replace(/\s+live\s*(?=\s*[\(w])/i, ' ').trim()
+  name = name.replace(/\s+live$/i, '').trim()
 
   const colonIdx = name.indexOf(':')
   if (colonIdx > 0 && colonIdx <= name.length / 2) {
@@ -31,6 +33,31 @@ export function parseArtistName(raw: string): ParseResult {
       .map(s => s.trim())
       .filter(Boolean)
     return { collective, members, role: 'member' }
+  }
+
+  if (/ w\/ /.test(name)) {
+    const wIdx = name.search(/ w\/ /)
+    const collective = name.slice(0, wIdx).trim()
+    const remainder = name.slice(wIdx + 4).trim()
+    const members = remainder
+      .replace(/ & /g, ', ')
+      .replace(/ and /g, ', ')
+      .split(', ')
+      .map(s => s.trim())
+      .filter(Boolean)
+    return { collective, members, role: 'member' }
+  }
+
+  if (/ featuring /i.test(name)) {
+    const [collective, ...rest] = name.split(/ featuring /i)
+    const remainder = rest.join(' featuring ')
+    const members = remainder
+      .replace(/ & /g, ', ')
+      .replace(/ and /g, ', ')
+      .split(', ')
+      .map(s => s.trim())
+      .filter(Boolean)
+    return { collective: collective.trim(), members, role: 'member' }
   }
 
   if (/ f2f /i.test(name)) {

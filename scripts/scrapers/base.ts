@@ -62,6 +62,20 @@ export function generateSlug(name: string): string {
     .replace(/^-|-$/g, '')
 }
 
+export async function fetchNuxtData(url: string): Promise<Record<string, any>> {
+  const browser = await getBrowser()
+  const page = await browser.newPage()
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForTimeout(3000)
+    const data = await page.evaluate(() => (window as any).__NUXT__?.data)
+    if (!data) throw new Error('No __NUXT__ data found on page')
+    return data
+  } finally {
+    await page.close()
+  }
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }

@@ -25,8 +25,7 @@ create table sets (
   day date not null,
   start_time time not null,
   end_time time not null,
-  is_live boolean default false,
-  awakenings_url text
+  is_live boolean default false
 );
 
 create table user_plans (
