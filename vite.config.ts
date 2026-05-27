@@ -29,7 +29,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,woff2,woff,ttf}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/(festivals|stages|sets)/,
+            urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/(festivals|stages|sets|artists|set_artists)/,
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'timetable-api',

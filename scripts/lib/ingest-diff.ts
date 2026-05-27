@@ -461,6 +461,28 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
       lines.push('')
     }
+
+    // For multi-artist sets without a parsed collective (e.g. "PLO Man & Skee Mask"),
+    // check if the scraper has a combo bio under the full set name.
+    // Dekmantel stores one bio per timeslot, so the bio is keyed to the combined name.
+    if (!parsed.collective && parsed.members.length > 1) {
+      const comboSortName = set.artist_name.toLowerCase().trim()
+      if (!processedArtists.has(comboSortName)) {
+        const scraperArtist = scrapedBios.get(comboSortName)
+        if (scraperArtist?.bio) {
+          processedArtists.add(comboSortName)
+          const bio = scraperArtist.bio
+          const sourceUrl = scraperArtist.source_url
+          lines.push(`  -- Combo bio for multi-artist set`)
+          lines.push(`  INSERT INTO artists (name, sort_name, is_collective, bio${sourceUrl ? ', source_url' : ''})`)
+          lines.push(`  VALUES ('${escSql(set.artist_name)}', '${escSql(comboSortName)}', false, '${escSql(bio)}'${sourceUrl ? `, '${escSql(sourceUrl)}'` : ''})`)
+          lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
+          lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
+          lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
+          lines.push('')
+        }
+      }
+    }
   }
 
   lines.push('  -- Set-artist links')
@@ -485,6 +507,18 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       lines.push(`  VALUES (set_uuid, artist_uuid, '${parsed.role}', ${i + 1})`)
       lines.push(`  ON CONFLICT (set_id, artist_id) DO NOTHING;`)
     })
+
+    // Link combo artist entry for multi-artist sets that have a scraped combo bio
+    if (!parsed.collective && parsed.members.length > 1) {
+      const comboSortName = set.artist_name.toLowerCase().trim()
+      if (processedArtists.has(comboSortName)) {
+        lines.push(`  SELECT id INTO artist_uuid FROM artists WHERE sort_name = '${escSql(comboSortName)}';`)
+        lines.push(`  INSERT INTO set_artists (set_id, artist_id, role, billing_order)`)
+        lines.push(`  VALUES (set_uuid, artist_uuid, 'collab', 0)`)
+        lines.push(`  ON CONFLICT (set_id, artist_id) DO NOTHING;`)
+      }
+    }
+
     lines.push('')
   }
 

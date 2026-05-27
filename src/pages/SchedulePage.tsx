@@ -8,8 +8,10 @@ import { useAuth } from '../hooks/useAuth'
 import { DayToggle } from '../components/schedule/DayToggle'
 import { StageFilter } from '../components/schedule/StageFilter'
 import { SetCard } from '../components/schedule/SetCard'
+import { SetSheet } from '../components/schedule/SetSheet'
 import { LineupView } from '../components/schedule/LineupView'
 import { getDays, toSortableTime, isAfterMidnight } from '../lib/dates'
+import type { SetWithStage } from '../types/database'
 
 export function SchedulePage() {
   const { slug } = useParams<{ slug: string }>()
@@ -25,6 +27,7 @@ export function SchedulePage() {
 
   const [selectedDay, setSelectedDay] = useState<string>('')
   const [selectedStages, setSelectedStages] = useState<Set<string>>(new Set())
+  const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
   const nowRef = useRef<HTMLDivElement>(null)
   const hasScrolled = useRef(false)
 
@@ -136,6 +139,7 @@ export function SchedulePage() {
                   rating={user ? getRating(set.id) : null}
                   onToggleGoing={() => toggleGoing(set.id)}
                   onRate={(v) => setRating(set.id, v)}
+                  onOpenSheet={() => setSheetSet(set)}
                 />
               </div>
             </div>
@@ -148,6 +152,17 @@ export function SchedulePage() {
           </div>
         )}
       </div>
+
+      {sheetSet && (
+        <SetSheet
+          set={sheetSet}
+          isGoing={user ? isGoing(sheetSet.id) : false}
+          rating={user ? getRating(sheetSet.id) : null}
+          onToggleGoing={() => toggleGoing(sheetSet.id)}
+          onRate={(v) => setRating(sheetSet.id, v)}
+          onClose={() => setSheetSet(null)}
+        />
+      )}
     </div>
   )
 }

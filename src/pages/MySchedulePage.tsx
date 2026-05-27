@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useFestival, useSets } from '../hooks/useFestivalData'
 import { useUserPlans } from '../hooks/useUserPlans'
 import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { SetCard } from '../components/schedule/SetCard'
+import { SetSheet } from '../components/schedule/SetSheet'
 import { formatDayLabel } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
@@ -21,6 +22,7 @@ export function MySchedulePage() {
   const { planSetIds, isGoing, toggleGoing } = useUserPlans()
   const { getRating, setRating } = useUserRatings()
   const now = useNow()
+  const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
 
   const mySets = useMemo(() => {
     return sets
@@ -85,11 +87,23 @@ export function MySchedulePage() {
               rating={getRating(set.id)}
               onToggleGoing={() => toggleGoing(set.id)}
               onRate={(v) => setRating(set.id, v)}
+              onOpenSheet={() => setSheetSet(set)}
               showConflict={conflictIds.has(set.id)}
             />
           </div>
         )
       })}
+
+      {sheetSet && (
+        <SetSheet
+          set={sheetSet}
+          isGoing={isGoing(sheetSet.id)}
+          rating={getRating(sheetSet.id)}
+          onToggleGoing={() => toggleGoing(sheetSet.id)}
+          onRate={(v) => setRating(sheetSet.id, v)}
+          onClose={() => setSheetSet(null)}
+        />
+      )}
     </div>
   )
 }
