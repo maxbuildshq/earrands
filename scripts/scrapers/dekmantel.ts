@@ -1,7 +1,7 @@
 import type { ScrapedData, ScrapedSet, ScrapedStage, ScrapedArtist } from './types.js'
 import { fetchNuxtData, generateSlug } from './base.js'
 
-type NuxtTimeslot = {
+export type NuxtTimeslot = {
   slug: string
   name: string
   content: string | null
@@ -37,14 +37,14 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-function parseIsoTime(iso: string): { day: string; time: string } {
+export function parseIsoTime(iso: string): { day: string; time: string } {
   // "2026-08-02T17:30:00.7200Z" → day="2026-08-02", time="17:30"
   const match = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/)
   if (!match) throw new Error(`Cannot parse ISO time: "${iso}"`)
   return { day: match[1], time: `${match[2]}:${match[3]}` }
 }
 
-function extractLiveStatus(name: string): { artistName: string; isLive: boolean } {
+export function extractLiveStatus(name: string): { artistName: string; isLive: boolean } {
   // "Artist Live" at the end
   const liveEndMatch = name.match(/^(.+?)\s+live$/i)
   if (liveEndMatch) return { artistName: liveEndMatch[1].trim(), isLive: true }
@@ -60,7 +60,7 @@ function extractLiveStatus(name: string): { artistName: string; isLive: boolean 
   return { artistName: name, isLive: false }
 }
 
-function getStageName(ts: NuxtTimeslot): string | null {
+export function getStageName(ts: NuxtTimeslot): string | null {
   if (!ts.location) return null
 
   if (ts.location.slug === 'into-the-city') {
