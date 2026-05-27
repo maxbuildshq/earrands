@@ -7,7 +7,7 @@ const DAY_NAMES: Record<string, number> = {
   FRIDAY: 5, SATURDAY: 6, SUNDAY: 0,
 }
 
-function parseFestivalDates(dateText: string): { start_date: string; end_date: string } {
+export function parseFestivalDates(dateText: string): { start_date: string; end_date: string } {
   // "Saturday May 16 2026 - Sunday May 17 2026 Sold out"
   const cleaned = dateText.replace(/\s*(Sold out|Tickets|Available).*$/i, '').trim()
   const parts = cleaned.split(/\s*-\s*/)
@@ -17,7 +17,7 @@ function parseFestivalDates(dateText: string): { start_date: string; end_date: s
   }
 }
 
-function parseAwakeningsDate(text: string): string {
+export function parseAwakeningsDate(text: string): string {
   // "Saturday May 16 2026" or "May 16 2026"
   const match = text.match(/(\w+)\s+(\d{1,2})\s+(\d{4})$/)
   if (!match) throw new Error(`Cannot parse date: "${text}"`)
@@ -32,7 +32,7 @@ function parseAwakeningsDate(text: string): string {
   return `${year}-${month}-${day.padStart(2, '0')}`
 }
 
-function resolveDayDate(
+export function resolveDayDate(
   dayName: string,
   startDate: string,
   endDate: string,
