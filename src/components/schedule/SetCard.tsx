@@ -10,6 +10,7 @@ type Props = {
   rating: -1 | 1 | null
   onToggleGoing: () => void
   onRate: (value: -1 | 1) => void
+  onOpenSheet: () => void
   showConflict?: boolean
 }
 
@@ -17,12 +18,16 @@ function formatTime(time: string) {
   return time.slice(0, 5)
 }
 
-export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, showConflict }: Props) {
+export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, onOpenSheet, showConflict }: Props) {
   const { user } = useAuth()
 
   return (
     <div
-      className={`relative bg-surface-raised border p-3 transition-colors ${
+      role="button"
+      tabIndex={0}
+      onClick={onOpenSheet}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
+      className={`relative bg-surface-raised border p-3 transition-colors cursor-pointer hover:bg-surface-hover ${
         isNow ? 'border-acid/50' : 'border-border'
       } ${showConflict ? 'border-conflict/60' : ''}`}
     >
@@ -67,7 +72,7 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, sh
         </div>
 
         {user && (
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             <GoingToggle isGoing={isGoing} onToggle={onToggleGoing} />
             <RatingButtons rating={rating} onRate={onRate} />
           </div>

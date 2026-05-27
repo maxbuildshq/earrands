@@ -71,8 +71,12 @@ src/
     schedule/
       DayToggle.tsx                # Day tab bar — labels generated dynamically
       StageFilter.tsx              # Stage filter chips
-      SetCard.tsx                  # Individual set card (null-safe for lineup-only)
+      SetCard.tsx                  # Individual set card — tappable to open SetSheet
+      SetSheet.tsx                 # Bottom sheet with artist bio, time/stage, actions
       LineupView.tsx               # Alphabetical list for festivals with no timetable
+    actions/
+      GoingToggle.tsx              # "Going" toggle button
+      RatingButtons.tsx            # Thumbs up/down rating buttons
     common/OfflineNotice.tsx
     AuthGuard.tsx
   contexts/AuthContext.tsx
@@ -205,6 +209,52 @@ The `day` field on sets stores the **festival day** (the day the programming blo
 
 `DayToggle` generates labels dynamically from date strings via `formatDayLabel()`. There is no hardcoded `DAY_LABELS` map anywhere.
 
+### Artist bio bottom sheet (`SetSheet`)
+
+Tapping anywhere on a `SetCard` (except the Going/Rating action buttons) opens a bottom sheet showing artist bios. This is the primary way users get context about an artist ("Who is this? What kind of music?").
+
+**Interaction model:**
+- Card-level: Going/Rating buttons remain on the card for at-glance use (`stopPropagation` prevents sheet from opening)
+- Sheet: slides up from bottom, shows set details → action buttons → scrollable bio content
+- Dismiss: swipe down, tap backdrop, press Escape, or close button (✕)
+- Body scroll is locked while sheet is open
+
+**Data flow:**
+- `useSets` query joins through `set_artists → artists` to fetch bios: `.select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective))')`
+- `SetWithStage` type includes `set_artists: SetArtistWithBio[] | null`
+- Service worker caches `artists` and `set_artists` tables for offline access
+
+**Multi-artist bio display logic** (`resolveBios()` in `SetSheet.tsx`):
+
+Two bio patterns exist in the data:
+- **Awakenings-style**: individual bio per artist (from separate artist pages)
+- **Dekmantel-style**: one combo bio per set/timeslot (describes the collaboration)
+
+Display priority:
+1. **Combo bio**: if an artist entry in `set_artists` has `name` matching the set's `artist_name` and has a bio → show first as the main content
+2. **Individual bios**: for each remaining artist with a bio → show in named sections below (`── ARTIST NAME ──` separators)
+3. Artists without bios are silently skipped (no empty placeholders)
+4. Solo sets: single bio, no separator
+5. No bios at all: minimal sheet with just set info and action buttons
+
+**Real scenarios handled:**
+| Scenario | Example | Display |
+|----------|---------|---------|
+| Individual bios only | M-high & Sidney Charles (Awakenings) | Two stacked sections |
+| Combo bio only | Blasha & Allatt (Dekmantel) | Single combo bio |
+| Combo + some individual | Ben UFO & Call Super & Objekt & Pariah | Combo bio, then Ben UFO + Objekt sections |
+| Partial data | Benja & Franc Fala | Only Franc Fala's bio shown |
+
+**Layout compatibility:** The bottom sheet works with both the current vertical list layout and a potential future horizontal timeline grid — the detail surface is independent of how the schedule is rendered.
+
+### Combo bios in the ingest pipeline
+
+The artist parser returns `collective: null` for `&` collab patterns (they're temporary collaborations, not permanent collectives). The ingest pipeline handles combo bios separately:
+
+- After inserting individual member artists, checks if `scrapedBios` has an entry for the full `set.artist_name` (lowercased)
+- If a combo bio exists, creates an additional artist entry with `is_collective: false` and links it to the set via `set_artists` with `billing_order: 0`
+- This is how Dekmantel combo bios (stored per-timeslot, not per-individual) get into the database
+
 ---
 
 ## Design System
@@ -212,15 +262,19 @@ The `day` field on sets stores the **festival day** (the day the programming blo
 Colors defined in `src/index.css` via Tailwind v4 `@theme`:
 
 ```css
---color-bg:             #0A0A0A   /* near-black background */
---color-surface:        #141414   /* card surfaces */
---color-text-primary:   #FFFFFF
---color-text-secondary: #FFFFFF   /* was #888888 — changed for outdoor readability */
---color-border:         #444444   /* was #2A2A2A — changed for outdoor readability */
---color-accent:         #FF3B00   /* orange-red accent */
+--color-acid:           #CCFF00   /* lime-green primary accent */
+--color-acid-dim:       #99CC00   /* dimmed accent (hover states) */
+--color-surface:        #0A0A0A   /* near-black page background */
+--color-surface-raised: #141414   /* card / sheet surfaces */
+--color-surface-hover:  #1E1E1E   /* card hover state */
+--color-border:         #444444   /* borders and dividers */
+--color-text-primary:   #E5E5E5   /* body text */
+--color-text-secondary: #FFFFFF   /* secondary labels — white for outdoor readability */
+--color-live:           #FF3B3B   /* "Live" badge */
+--color-conflict:       #FF6B2B   /* schedule conflict indicator */
 ```
 
-Used as Tailwind classes: `bg-bg`, `text-text-primary`, `text-text-secondary`, `border-border`, `bg-accent`, etc.
+Used as Tailwind classes: `bg-surface`, `bg-surface-raised`, `text-acid`, `text-text-primary`, `text-text-secondary`, `border-border`, `bg-live`, `bg-conflict`, etc.
 
 ---
 
@@ -340,5 +394,7 @@ For one-off festivals without an adapter, extract data in Claude Code as JSON ma
 
 - Artist detail page (`/artists/:slug`) showing all sets across festivals
 - `useArtistSets(artistId)` hook
-- Clickable artist names in SetCard
+- Genre/style tags on artists (requires LLM extraction from bios in ingest pipeline)
+- Artist photos in SetSheet sections
+- Music links per artist in SetSheet (SoundCloud, RA)
 - Additional scraper adapters (Verknipt, etc.)

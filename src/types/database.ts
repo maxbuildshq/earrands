@@ -27,8 +27,20 @@ export type FestivalSet = {
   is_live: boolean
 }
 
+export type SetArtistWithBio = {
+  billing_order: number
+  role: 'solo' | 'b2b' | 'f2f' | 'collab' | 'vs' | 'member'
+  artists: {
+    name: string
+    bio: string | null
+    source_url: string | null
+    is_collective: boolean
+  }
+}
+
 export type SetWithStage = FestivalSet & {
   stages: { name: string; sort_order: number } | null
+  set_artists: SetArtistWithBio[] | null
 }
 
 export type UserPlan = {

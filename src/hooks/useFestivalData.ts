@@ -57,7 +57,7 @@ export function useSets(festivalId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sets')
-        .select('*, stages(name, sort_order)')
+        .select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective))')
         .eq('festival_id', festivalId!)
         .order('start_time')
       if (error) throw error
