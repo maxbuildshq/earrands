@@ -7,6 +7,7 @@ export function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [marketing, setMarketing] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -22,13 +23,13 @@ export function SignUpPage() {
     }
 
     setLoading(true)
-    const { error } = await signUp(email, password)
+    const { error } = await signUp(email, password, { marketingConsent: marketing })
     if (error) {
       posthog.captureException(error, { feature: 'signup' })
       setError(error.message)
       setLoading(false)
     } else {
-      posthog.capture('user_signed_up', { email })
+      posthog.capture('user_signed_up', { email, marketing_consent: marketing })
       setSuccess(true)
       setLoading(false)
     }
@@ -89,6 +90,18 @@ export function SignUpPage() {
               className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
             />
           </div>
+
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={marketing}
+              onChange={e => setMarketing(e.target.checked)}
+              className="mt-0.5 w-4 h-4 shrink-0 accent-acid"
+            />
+            <span className="text-text-secondary text-xs leading-relaxed">
+              Email me occasional updates worth reading — new festivals and major features. No spam, unsubscribe anytime.
+            </span>
+          </label>
 
           {error && (
             <div className="text-live text-sm font-mono">{error}</div>

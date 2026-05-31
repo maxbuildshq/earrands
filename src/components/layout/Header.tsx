@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { FeedbackButton } from '../feedback/FeedbackButton'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -42,6 +43,8 @@ export function Header() {
               )}
             </>
           )}
+
+          <FeedbackButton />
 
           {user ? (
             <button

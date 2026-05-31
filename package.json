@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "parse-artists": "tsx --env-file=.env.local scripts/parse-artists.ts",
-    "ingest": "tsx --env-file=.env.local scripts/ingest.ts"
+    "ingest": "tsx --env-file=.env.local scripts/ingest.ts",
+    "notify": "tsx --env-file=.env.local scripts/notify.ts"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.8",
