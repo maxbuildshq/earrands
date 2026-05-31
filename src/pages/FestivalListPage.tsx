@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useFestivals } from '../hooks/useFestivalData'
 import type { Festival } from '../types/database'
+import { RequestFestivalCTA } from '../components/festival/RequestFestivalCTA'
+import { FollowButton } from '../components/festival/FollowButton'
 import posthog from 'posthog-js'
 
 function formatDateRange(start: string, end: string): string {
@@ -34,6 +36,8 @@ export function FestivalListPage() {
 
   return (
     <div className="pt-6 space-y-8">
+      <RequestFestivalCTA />
+
       {upcoming.length > 0 && (
         <section>
           <h2 className="font-mono font-bold text-xs text-acid uppercase tracking-widest mb-3">Upcoming</h2>
@@ -61,44 +65,52 @@ export function FestivalListPage() {
 
 function FestivalCard({ festival }: { festival: Festival }) {
   const past = isPast(festival)
+  const showFollow = !past && !festival.timetable_announced
 
   return (
-    <Link
-      to={`/festivals/${festival.slug}/schedule`}
-      onClick={() => posthog.capture('festival_selected', { festival_slug: festival.slug, festival_name: festival.name, is_past: past })}
-      className={`block border border-border p-4 transition-colors hover:border-acid/50 ${
-        past ? 'bg-surface-raised/50' : 'bg-surface-raised'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-mono font-bold text-base text-text-primary">{festival.name}</h3>
-          <div className="flex items-center gap-2 mt-1 text-sm text-text-secondary">
-            <span>{formatDateRange(festival.start_date, festival.end_date)}</span>
-            {festival.location && (
-              <>
-                <span className="text-border">·</span>
-                <span>{festival.location}</span>
-              </>
+    <div className={`border border-border ${past ? 'bg-surface-raised/50' : 'bg-surface-raised'}`}>
+      <Link
+        to={`/festivals/${festival.slug}/schedule`}
+        onClick={() => posthog.capture('festival_selected', { festival_slug: festival.slug, festival_name: festival.name, is_past: past })}
+        className="block p-4 transition-colors hover:bg-surface-hover"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-mono font-bold text-base text-text-primary">{festival.name}</h3>
+            <div className="flex items-center gap-2 mt-1 text-sm text-text-secondary">
+              <span>{formatDateRange(festival.start_date, festival.end_date)}</span>
+              {festival.location && (
+                <>
+                  <span className="text-border">·</span>
+                  <span>{festival.location}</span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="shrink-0">
+            {past ? (
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-border text-text-secondary uppercase">
+                Past
+              </span>
+            ) : festival.timetable_announced ? (
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-acid text-surface uppercase">
+                Timetable
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-acid text-acid uppercase">
+                Lineup
+              </span>
             )}
           </div>
         </div>
-        <div className="shrink-0">
-          {past ? (
-            <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-border text-text-secondary uppercase">
-              Past
-            </span>
-          ) : festival.timetable_announced ? (
-            <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-acid text-surface uppercase">
-              Timetable
-            </span>
-          ) : (
-            <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-acid text-acid uppercase">
-              Lineup
-            </span>
-          )}
+      </Link>
+
+      {showFollow && (
+        <div className="border-t border-border px-4 py-2 flex items-center justify-between gap-3">
+          <span className="font-mono text-xs text-text-secondary uppercase tracking-wider">Timetable not out yet</span>
+          <FollowButton festivalId={festival.id} />
         </div>
-      </div>
-    </Link>
+      )}
+    </div>
   )
 }

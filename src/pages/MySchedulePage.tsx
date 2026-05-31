@@ -6,6 +6,7 @@ import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { SetCard } from '../components/schedule/SetCard'
 import { SetSheet } from '../components/schedule/SetSheet'
+import { ShareScheduleSheet } from '../components/festival/ShareScheduleSheet'
 import { formatDayLabel } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
@@ -23,6 +24,7 @@ export function MySchedulePage() {
   const { getRating, setRating } = useUserRatings()
   const now = useNow()
   const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   const mySets = useMemo(() => {
     return sets
@@ -57,18 +59,23 @@ export function MySchedulePage() {
     )
   }
 
-  let lastDay = ''
-
   return (
     <div className="pt-4 space-y-2">
       <div className="flex items-center justify-between mb-2">
         <h1 className="font-mono font-bold text-lg text-acid tracking-tight">MY SETS</h1>
-        <span className="text-text-secondary text-sm font-mono">{mySets.length} sets</span>
+        <div className="flex items-center gap-3">
+          <span className="text-text-secondary text-sm font-mono">{mySets.length} sets</span>
+          <button
+            onClick={() => setShareOpen(true)}
+            className="px-3 py-1.5 text-xs font-mono font-bold uppercase tracking-wider border border-acid text-acid hover:bg-acid hover:text-surface transition-colors"
+          >
+            Share
+          </button>
+        </div>
       </div>
 
-      {mySets.map(set => {
-        const showDayHeader = set.day !== lastDay
-        lastDay = set.day
+      {mySets.map((set, i) => {
+        const showDayHeader = i === 0 || mySets[i - 1].day !== set.day
         const playing = set.start_time && set.end_time
           ? isNowPlaying(now, set.day, set.start_time, set.end_time)
           : false
@@ -102,6 +109,14 @@ export function MySchedulePage() {
           onToggleGoing={() => toggleGoing(sheetSet.id)}
           onRate={(v) => setRating(sheetSet.id, v)}
           onClose={() => setSheetSet(null)}
+        />
+      )}
+
+      {shareOpen && festival && (
+        <ShareScheduleSheet
+          festivalName={festival.name}
+          sets={mySets}
+          onClose={() => setShareOpen(false)}
         />
       )}
     </div>

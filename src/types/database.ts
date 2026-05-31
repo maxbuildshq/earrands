@@ -75,3 +75,19 @@ export type SetArtist = {
   role: 'solo' | 'b2b' | 'f2f' | 'collab' | 'vs' | 'member'
   billing_order: number
 }
+
+export type FestivalFollow = {
+  id: string
+  user_id: string
+  festival_id: string
+  notified_at: string | null
+  created_at: string
+}
+
+export type FestivalRequest = {
+  id: string
+  user_id: string
+  raw_name: string
+  region: string | null
+  created_at: string
+}

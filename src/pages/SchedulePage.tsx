@@ -95,6 +95,7 @@ export function SchedulePage() {
           <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
         )}
         <LineupView
+          festival={festival}
           sets={sets}
           day={selectedDay}
           isGoing={(id) => isGoing(id)}
