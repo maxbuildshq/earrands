@@ -1,5 +1,5 @@
 import { sleep } from '../../scrapers/base.js'
-import { normalizeUrl } from './name-utils.js'
+import { normalizeUrl, normalizeSoundCloudUrl } from './name-utils.js'
 
 const DISCOGS_API = 'https://api.discogs.com'
 
@@ -80,7 +80,7 @@ async function fetchDiscogsArtist(
       instagram_url = normalizeUrl(url)
     }
     if (url.includes('soundcloud.com/') && !soundcloud_url) {
-      soundcloud_url = normalizeUrl(url)
+      soundcloud_url = normalizeSoundCloudUrl(url)
     }
     if (url.includes('bandcamp.com') && !bandcamp_url) {
       bandcamp_url = normalizeUrl(url)

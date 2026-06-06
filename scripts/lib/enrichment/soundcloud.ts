@@ -1,4 +1,4 @@
-import { fetchWithCheerio } from '../../scrapers/base.js'
+import { fetchWithCheerio, getBrowser } from '../../scrapers/base.js'
 import { normalizeUrl } from './name-utils.js'
 
 export type SoundCloudProfile = {
@@ -9,13 +9,23 @@ export type SoundCloudProfile = {
   track_urls: string[]
 }
 
+type WebProfile = {
+  url: string
+  network: string
+  title: string
+  username?: string
+}
+
 export async function scrapeSoundCloudProfile(profileUrl: string): Promise<SoundCloudProfile | null> {
   try {
+    // Fetch static HTML for the image (og:image is in SSR HTML)
     const $ = await fetchWithCheerio(profileUrl)
-
     const image_url = extractProfileImage($)
-    const links = extractProfileLinks($)
     const track_urls = extractTrackUrls($, profileUrl)
+
+    // Use Playwright to intercept the web-profiles API call — social links are not in SSR HTML
+    const webProfiles = await fetchWebProfiles(profileUrl)
+    const links = extractLinksFromWebProfiles(webProfiles)
 
     return {
       image_url,
@@ -27,6 +37,67 @@ export async function scrapeSoundCloudProfile(profileUrl: string): Promise<Sound
   } catch {
     return null
   }
+}
+
+async function fetchWebProfiles(profileUrl: string): Promise<WebProfile[]> {
+  const browser = await getBrowser()
+  const page = await browser.newPage()
+  try {
+    let profiles: WebProfile[] = []
+
+    page.on('response', async res => {
+      if (res.url().includes('/web-profiles')) {
+        try {
+          profiles = await res.json() as WebProfile[]
+        } catch {}
+      }
+    })
+
+    await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    // Wait for the web-profiles API call to complete
+    await page.waitForTimeout(3000)
+    return profiles
+  } finally {
+    await page.close()
+  }
+}
+
+function extractLinksFromWebProfiles(profiles: WebProfile[]): {
+  instagram: string | null
+  bandcamp: string | null
+  website: string | null
+} {
+  let instagram: string | null = null
+  let bandcamp: string | null = null
+  let website: string | null = null
+
+  for (const profile of profiles) {
+    const url = profile.url
+    if (!url || !url.startsWith('http')) continue
+
+    const normalized = normalizeUrl(url)
+
+    if (profile.network === 'instagram' && !instagram) {
+      instagram = normalized
+      continue
+    }
+    if (url.includes('bandcamp.com') && !bandcamp) {
+      bandcamp = normalized
+      continue
+    }
+    // Capture first personal/other link as website (skip known noise)
+    if (!website &&
+        !url.includes('soundcloud.com') &&
+        !url.includes('instagram.com') &&
+        !url.includes('bandcamp.com') &&
+        !url.includes('facebook.com') &&
+        !url.includes('twitter.com') &&
+        !url.includes('x.com')) {
+      website = normalized
+    }
+  }
+
+  return { instagram, bandcamp, website }
 }
 
 function extractProfileImage($: ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never): string | null {
@@ -41,54 +112,6 @@ function extractProfileImage($: ReturnType<typeof fetchWithCheerio> extends Prom
   }
 
   return null
-}
-
-function extractProfileLinks($: ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never): {
-  instagram: string | null
-  bandcamp: string | null
-  website: string | null
-} {
-  let instagram: string | null = null
-  let bandcamp: string | null = null
-  let website: string | null = null
-
-  $('a[href]').each((_, el) => {
-    const href = $(el).attr('href')
-    if (!href) return
-
-    const resolved = resolveRedirect(href)
-
-    if (resolved.includes('instagram.com/') && !instagram) {
-      instagram = normalizeUrl(resolved)
-    }
-    if (resolved.includes('bandcamp.com') && !bandcamp) {
-      bandcamp = normalizeUrl(resolved)
-    }
-    if (!resolved.includes('soundcloud.com') &&
-        !resolved.includes('instagram.com') &&
-        !resolved.includes('bandcamp.com') &&
-        !resolved.includes('facebook.com') &&
-        !resolved.includes('twitter.com') &&
-        !resolved.includes('x.com') &&
-        !website &&
-        (resolved.startsWith('http://') || resolved.startsWith('https://'))) {
-      website = resolved
-    }
-  })
-
-  return { instagram, bandcamp, website }
-}
-
-function resolveRedirect(href: string): string {
-  if (href.includes('gate.sc/') || href.includes('exit.sc/')) {
-    try {
-      const url = new URL(href)
-      return url.searchParams.get('url') ?? href
-    } catch {
-      return href
-    }
-  }
-  return href
 }
 
 function extractTrackUrls(

@@ -1,4 +1,4 @@
-import { buildSearchQuery, isSoundCloudProfileUrl, isInstagramProfileUrl, normalizeUrl } from './name-utils.js'
+import { buildSearchQuery, isSoundCloudProfileUrl, isInstagramProfileUrl, normalizeSoundCloudUrl, normalizeUrl } from './name-utils.js'
 
 const BRAVE_API_URL = 'https://api.search.brave.com/res/v1/web/search'
 
@@ -21,7 +21,7 @@ export async function searchSoundCloud(
 
   for (const result of results) {
     if (isSoundCloudProfileUrl(result.url)) {
-      return normalizeUrl(result.url)
+      return normalizeSoundCloudUrl(result.url)
     }
   }
   return null

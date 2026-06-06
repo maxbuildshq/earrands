@@ -3,6 +3,7 @@ import {
   buildSearchQuery,
   cleanArtistName,
   normalizeUrl,
+  normalizeSoundCloudUrl,
   isSoundCloudProfileUrl,
   isInstagramProfileUrl,
   isComboEntry,
@@ -52,6 +53,21 @@ describe('normalizeUrl', () => {
   })
   it('removes multiple trailing slashes', () => {
     expect(normalizeUrl('https://soundcloud.com/alarico_katana/')).toBe('https://soundcloud.com/alarico_katana')
+  })
+})
+
+describe('normalizeSoundCloudUrl', () => {
+  it('rewrites m.soundcloud.com to soundcloud.com', () => {
+    expect(normalizeSoundCloudUrl('https://m.soundcloud.com/adambeyer')).toBe('https://soundcloud.com/adambeyer')
+  })
+  it('strips trailing slash after rewriting', () => {
+    expect(normalizeSoundCloudUrl('https://m.soundcloud.com/adambeyer/')).toBe('https://soundcloud.com/adambeyer')
+  })
+  it('leaves desktop URL unchanged', () => {
+    expect(normalizeSoundCloudUrl('https://soundcloud.com/adambeyer')).toBe('https://soundcloud.com/adambeyer')
+  })
+  it('returns original string on invalid URL', () => {
+    expect(normalizeSoundCloudUrl('not-a-url')).toBe('not-a-url')
   })
 })
 

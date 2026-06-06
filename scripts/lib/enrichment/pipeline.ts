@@ -1,7 +1,7 @@
 import { searchSoundCloud, searchInstagram } from './brave-search.js'
 import { scrapeSoundCloudProfile, validateWithOEmbed } from './soundcloud.js'
 import { searchDiscogsArtist } from './discogs.js'
-import { isComboEntry } from './name-utils.js'
+import { isComboEntry, extractInstagramHandle } from './name-utils.js'
 import { sleep } from '../../scrapers/base.js'
 import type { EnrichmentField, EnrichmentResult, ArtistRow, Confidence } from './types.js'
 
@@ -12,6 +12,8 @@ export type PipelineConfig = {
   fields?: EnrichmentField[]
   onProgress?: (artist: string, step: string) => void
 }
+
+type InstagramCandidate = { url: string; source: string }
 
 function needsField(fields: EnrichmentField[] | undefined, field: EnrichmentField): boolean {
   return !fields || fields.includes(field)
@@ -44,6 +46,7 @@ export async function enrichArtist(
   const { braveApiKey, discogsKey, discogsSecret, fields } = config
   const hasBrave = !!braveApiKey
   const hasDiscogs = !!(discogsKey && discogsSecret)
+  const instagramCandidates: InstagramCandidate[] = []
 
   // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
   if (hasBrave && needsField(fields, 'soundcloud') && !result.soundcloud_url) {
@@ -61,14 +64,13 @@ export async function enrichArtist(
     await sleep(300)
   }
 
-  // ── Step 2: Find Instagram via Brave (if still missing) ────────────────
+  // ── Step 2: Find Instagram via Brave ───────────────────────────────────
   if (hasBrave && needsField(fields, 'instagram') && !result.instagram_url) {
     config.onProgress?.(artist.name, 'Brave → Instagram')
     try {
       const igUrl = await searchInstagram(artist.name, braveApiKey!)
       if (igUrl) {
-        result.instagram_url = igUrl
-        result.sources.push('brave-search-ig')
+        instagramCandidates.push({ url: igUrl, source: 'brave-search-ig' })
       }
     } catch (err: any) {
       if (err.message?.includes('rate limit')) throw err
@@ -82,7 +84,7 @@ export async function enrichArtist(
     const needsDiscogs = (needsField(fields, 'image') && !result.image_url) ||
                          (needsField(fields, 'bandcamp') && !result.bandcamp_url) ||
                          (needsField(fields, 'soundcloud') && !result.soundcloud_url) ||
-                         (needsField(fields, 'instagram') && !result.instagram_url)
+                         needsField(fields, 'instagram')
 
     if (needsDiscogs) {
       config.onProgress?.(artist.name, 'Searching Discogs')
@@ -102,9 +104,8 @@ export async function enrichArtist(
             result.soundcloud_url = discogs.soundcloud_url
             result.sources.push('discogs-soundcloud')
           }
-          if (!result.instagram_url && discogs.instagram_url) {
-            result.instagram_url = discogs.instagram_url
-            result.sources.push('discogs-instagram')
+          if (discogs.instagram_url) {
+            instagramCandidates.push({ url: discogs.instagram_url, source: 'discogs-instagram' })
           }
         }
       } catch (err: any) {
@@ -116,10 +117,9 @@ export async function enrichArtist(
   }
 
   // ── Step 4: Scrape SoundCloud profile ───────────────────────────────────
-  // Runs after all URL sources are exhausted — catches SC URLs from Google or Discogs.
   if (result.soundcloud_url) {
     const needsScrape = (needsField(fields, 'image') && !result.image_url) ||
-                        (needsField(fields, 'instagram') && !result.instagram_url) ||
+                        needsField(fields, 'instagram') ||
                         (needsField(fields, 'soundcloud') && !result.soundcloud_embed_url) ||
                         (needsField(fields, 'bandcamp') && !result.bandcamp_url)
 
@@ -131,21 +131,28 @@ export async function enrichArtist(
           result.image_url = profile.image_url
           result.sources.push('soundcloud-image')
         }
-        if (!result.instagram_url && profile.instagram_url) {
-          result.instagram_url = profile.instagram_url
-          result.sources.push('soundcloud-instagram')
+        if (profile.instagram_url) {
+          instagramCandidates.push({ url: profile.instagram_url, source: 'soundcloud-instagram' })
         }
         if (!result.bandcamp_url && profile.bandcamp_url) {
           result.bandcamp_url = profile.bandcamp_url
           result.sources.push('soundcloud-bandcamp')
         }
         if (!result.soundcloud_embed_url) {
-          // Profile URL embeds as a multi-track widget — oEmbed validates this in step 5
           result.soundcloud_embed_url = result.soundcloud_url
           result.sources.push('soundcloud-embed')
         }
       }
       await sleep(500)
+    }
+  }
+
+  // ── Step 4b: Resolve Instagram from candidates ─────────────────────────
+  if (needsField(fields, 'instagram') && !result.instagram_url) {
+    const resolved = resolveInstagram(instagramCandidates, result.review_notes)
+    if (resolved) {
+      result.instagram_url = resolved.url
+      result.sources.push(resolved.source)
     }
   }
 
@@ -164,6 +171,43 @@ export async function enrichArtist(
   result.needs_review = result.confidence === 'low' || result.review_notes.length > 0
 
   return result
+}
+
+export function resolveInstagram(
+  candidates: InstagramCandidate[],
+  reviewNotes: string[],
+): InstagramCandidate | null {
+  if (candidates.length === 0) {
+    reviewNotes.push('No Instagram found from any source')
+    return null
+  }
+
+  const withHandle = candidates.map(c => ({
+    ...c,
+    handle: extractInstagramHandle(c.url)?.toLowerCase(),
+  }))
+
+  const scIg = withHandle.find(c => c.source === 'soundcloud-instagram')
+  const discogsIg = withHandle.find(c => c.source === 'discogs-instagram')
+  const braveIg = withHandle.find(c => c.source === 'brave-search-ig')
+
+  const authoritative = scIg ?? discogsIg
+
+  if (authoritative && braveIg && authoritative.handle !== braveIg.handle) {
+    reviewNotes.push(
+      `Instagram conflict: Brave found ${braveIg.url}, artist profile links to ${authoritative.url} — using profile link`
+    )
+  }
+
+  if (authoritative) return { url: authoritative.url, source: authoritative.source }
+
+  if (braveIg) {
+    reviewNotes.push(`Instagram from search only — no profile cross-validation: ${braveIg.url}`)
+    return { url: braveIg.url, source: braveIg.source }
+  }
+
+  reviewNotes.push('No Instagram found from any source')
+  return null
 }
 
 function computeConfidence(result: EnrichmentResult): Confidence {

@@ -17,6 +17,7 @@ const fieldsArg = args.find(a => a.startsWith('--fields='))?.split('=').slice(1)
 const limitArg = args.find(a => a.startsWith('--limit='))?.split('=')[1]
 const dryRun = args.includes('--dry-run')
 const force = args.includes('--force')
+const fresh = args.includes('--fresh')
 const resume = args.includes('--resume')
 
 if (args.includes('--help') || args.includes('-h')) {
@@ -26,6 +27,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --artist="Speedy J"             Single artist (testing)
   npm run enrich -- --dry-run                       Preview, no DB writes
   npm run enrich -- --force                         Re-enrich all (ignore enriched_at)
+  npm run enrich -- --fresh                         Ignore existing field values (fetch everything from scratch)
   npm run enrich -- --limit=30                      Process max N artists
   npm run enrich -- --resume                        Continue from last saved progress
   npm run enrich -- --fields=bandcamp               Only fetch specific fields
@@ -44,6 +46,7 @@ const limit = limitArg ? parseInt(limitArg, 10) : undefined
 console.log('Festival Pulse — Artist Enrichment')
 console.log('──────────────────────────────────')
 if (dryRun) console.log(chalk.yellow('DRY RUN — no DB writes'))
+if (fresh) console.log(chalk.yellow('FRESH — ignoring existing field values'))
 if (fields) console.log(chalk.dim(`Fields: ${fields.join(', ')}`))
 if (limit) console.log(chalk.dim(`Limit: ${limit} artists`))
 if (resume) console.log(chalk.dim('Resuming from last progress'))
@@ -158,7 +161,12 @@ async function fetchArtists(): Promise<ArtistRow[]> {
     .select('id, name, sort_name, is_collective, image_url, instagram_url, soundcloud_url, soundcloud_embed_url, bandcamp_url, discogs_id, enriched_at')
 
   if (artistArg) {
-    query = query.ilike('name', artistArg)
+    const names = artistArg.split(',').map(n => n.trim()).filter(Boolean)
+    if (names.length === 1) {
+      query = query.ilike('name', names[0])
+    } else {
+      query = query.or(names.map(n => `name.ilike.${n}`).join(','))
+    }
   }
 
   if (festivalArg) {
@@ -269,7 +277,16 @@ async function main() {
     process.stdout.write(`\r  ${chalk.bold(progress)} ${artist.name}${''.padEnd(40)}`)
 
     try {
-      const result = await enrichArtist(artist, config)
+      const artistToEnrich = fresh ? {
+        ...artist,
+        image_url: null,
+        instagram_url: null,
+        soundcloud_url: null,
+        soundcloud_embed_url: null,
+        bandcamp_url: null,
+        discogs_id: null,
+      } : artist
+      const result = await enrichArtist(artistToEnrich, config)
       results.push(result)
       completedNames.push(artist.sort_name)
       saveProgress(festivalArg ?? null, completedNames)
