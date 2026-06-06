@@ -23,7 +23,7 @@ if (!slug && !listMode) {
   process.exit(0)
 }
 
-console.log('Festival Pulse — Notifier')
+console.log('earrands — Notifier')
 console.log('─────────────────────────')
 if (dryRun) console.log(chalk.yellow('DRY RUN — no emails will be sent'))
 console.log()
@@ -34,7 +34,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const resendKey = process.env.RESEND_API_KEY
 const fromEmail = process.env.NOTIFY_FROM_EMAIL
-const appBaseUrl = process.env.APP_BASE_URL ?? 'https://festival-pulse.pages.dev'
+const appBaseUrl = process.env.APP_BASE_URL ?? 'https://earrands.app/app'
 
 if (!supabaseUrl || !serviceKey) {
   console.error(chalk.red('Missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local'))

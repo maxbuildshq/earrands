@@ -18,7 +18,7 @@ export const TEMPLATES: ShareTemplate[] = [
 ]
 
 export function buildShareFilename(festivalName: string): string {
-  return `festival-pulse-${festivalName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`
+  return `earrands-${festivalName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.png`
 }
 
 const W = 1080
@@ -44,7 +44,7 @@ export function drawSchedule(
 
   ctx.font = '700 34px "Space Mono", monospace'
   ctx.fillStyle = t.accent
-  ctx.fillText('FESTIVAL PULSE', pad, y)
+  ctx.fillText('EARRANDS', pad, y)
   y += 96
 
   ctx.font = '700 76px "Space Mono", monospace'
@@ -100,7 +100,7 @@ export function drawSchedule(
 
   ctx.font = '400 28px "Space Mono", monospace'
   ctx.fillStyle = t.sub
-  ctx.fillText('festivalpulse.app', pad, footerY)
+  ctx.fillText('earrands.app', pad, footerY)
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {

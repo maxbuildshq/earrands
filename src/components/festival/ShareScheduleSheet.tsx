@@ -57,7 +57,7 @@ export function ShareScheduleSheet({ festivalName, sets, onClose }: Props) {
           files: [file],
           title: `My ${festivalName} schedule`,
           text: `My ${festivalName} lineup 🎵`,
-          url: 'https://festivalpulse.app',
+          url: 'https://earrands.app',
         })
       } else {
         downloadBlob(blob, filename)

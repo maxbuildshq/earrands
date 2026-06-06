@@ -19,7 +19,7 @@ export function RequestFestivalSheet({ onClose }: Props) {
   if (!user) {
     return (
       <BottomSheet title="REQUEST A FESTIVAL" onClose={onClose}>
-        <AuthPrompt message="Create an account to request a festival. We'll email you if we add it to Festival Pulse." />
+        <AuthPrompt message="Create an account to request a festival. We'll email you if we add it to earrands." />
       </BottomSheet>
     )
   }
