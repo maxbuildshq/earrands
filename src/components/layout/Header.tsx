@@ -16,7 +16,7 @@ export function Header() {
     <header className="sticky top-0 z-50 bg-surface/95 backdrop-blur-sm border-b border-border pt-[env(safe-area-inset-top)]">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link to="/" className="font-mono font-bold text-acid text-sm tracking-tight">
-          FESTIVAL<span className="text-text-secondary">PULSE</span>
+          earrands
         </Link>
 
         <nav className="flex items-center gap-1">

@@ -25,7 +25,7 @@ const args = process.argv.slice(2)
 const festivalSlug = args.find(a => a.startsWith('--festival='))?.split('=')[1]
 const dryRun = args.includes('--dry-run')
 
-console.log('🎵 Festival Pulse — Artist Parser')
+console.log('🎵 earrands — Artist Parser')
 console.log('──────────────────────────────────')
 if (dryRun) console.log('🔍 DRY RUN — no DB changes will be made')
 console.log(festivalSlug ? `🎪 Festival: ${festivalSlug}` : '🎪 Processing all festivals')

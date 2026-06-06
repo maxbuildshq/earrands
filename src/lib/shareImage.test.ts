@@ -33,7 +33,7 @@ describe('TEMPLATES', () => {
 describe('buildShareFilename', () => {
   it('produces a PNG filename from a festival name', () => {
     const result = buildShareFilename('Awakenings Festival 2026')
-    expect(result).toMatch(/^festival-pulse-.*\.png$/)
+    expect(result).toMatch(/^earrands-.*\.png$/)
     expect(result).toContain('awakenings')
   })
 
@@ -44,6 +44,6 @@ describe('buildShareFilename', () => {
   })
 
   it('handles short names', () => {
-    expect(buildShareFilename('ADE')).toBe('festival-pulse-ade.png')
+    expect(buildShareFilename('ADE')).toBe('earrands-ade.png')
   })
 })

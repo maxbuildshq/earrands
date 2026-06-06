@@ -25,7 +25,7 @@ if (!urlArg && !jsonArg) {
   process.exit(0)
 }
 
-console.log('Festival Pulse — Ingest Pipeline')
+console.log('earrands — Ingest Pipeline')
 console.log('────────────────────────────────')
 if (dryRun) console.log(chalk.yellow('DRY RUN — no SQL file will be generated'))
 console.log()

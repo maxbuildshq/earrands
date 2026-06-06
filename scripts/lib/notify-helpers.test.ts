@@ -47,7 +47,7 @@ describe('buildSubject', () => {
   })
 
   it('returns request-added subject for request', () => {
-    expect(buildSubject('Time Warp 2026', 'request')).toBe('Time Warp 2026 is now on Festival Pulse')
+    expect(buildSubject('Time Warp 2026', 'request')).toBe('Time Warp 2026 is now on earrands')
   })
 })
 
@@ -57,7 +57,7 @@ describe('buildEmailHtml', () => {
     expect(html).toContain('909 Festival')
     expect(html).toContain('https://example.com/schedule')
     expect(html).toContain('timetable is live')
-    expect(html).toContain('FESTIVAL PULSE')
+    expect(html).toContain('EARRANDS')
     expect(html).toContain('un-follow')
   })
 
@@ -92,14 +92,14 @@ describe('buildEmailText', () => {
 
 describe('buildShareFilename', () => {
   it('lowercases and slugifies the festival name', () => {
-    expect(buildShareFilename('Awakenings Festival 2026')).toBe('festival-pulse-awakenings-festival-2026.png')
+    expect(buildShareFilename('Awakenings Festival 2026')).toBe('earrands-awakenings-festival-2026.png')
   })
 
   it('strips non-alphanumeric characters', () => {
-    expect(buildShareFilename('909 Festival — 2026!')).toBe('festival-pulse-909-festival-2026-.png')
+    expect(buildShareFilename('909 Festival — 2026!')).toBe('earrands-909-festival-2026-.png')
   })
 
   it('handles simple names', () => {
-    expect(buildShareFilename('Dekmantel')).toBe('festival-pulse-dekmantel.png')
+    expect(buildShareFilename('Dekmantel')).toBe('earrands-dekmantel.png')
   })
 })

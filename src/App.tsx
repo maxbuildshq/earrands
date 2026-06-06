@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import { Layout } from './components/layout/Layout'
@@ -23,7 +23,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/app">
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<FestivalListPage />} />
@@ -32,6 +32,7 @@ function App() {
               <Route path="login" element={<LoginPage />} />
               <Route path="signup" element={<SignUpPage />} />
             </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <OfflineNotice />
         </BrowserRouter>

@@ -43,7 +43,7 @@ const fields = fieldsArg
   : undefined
 const limit = limitArg ? parseInt(limitArg, 10) : undefined
 
-console.log('Festival Pulse — Artist Enrichment')
+console.log('earrands — Artist Enrichment')
 console.log('──────────────────────────────────')
 if (dryRun) console.log(chalk.yellow('DRY RUN — no DB writes'))
 if (fresh) console.log(chalk.yellow('FRESH — ignoring existing field values'))

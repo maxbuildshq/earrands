@@ -1,12 +1,12 @@
 {
-  "name": "festival-pulse",
+  "name": "earrands",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=festival-pulse",
+    "build": "tsc -b && rm -rf dist && vite build && cp dist/app/index.html dist/index.html",
+    "deploy": "npm run build && npx wrangler deploy",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
