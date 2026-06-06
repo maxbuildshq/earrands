@@ -20,6 +20,18 @@ export function normalizeUrl(url: string): string {
   }
 }
 
+export function normalizeSoundCloudUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.hostname === 'm.soundcloud.com') {
+      u.hostname = 'soundcloud.com'
+    }
+    return normalizeUrl(u.toString())
+  } catch {
+    return url
+  }
+}
+
 export function extractSoundCloudUsername(url: string): string | null {
   try {
     const u = new URL(url)
