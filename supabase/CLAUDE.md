@@ -5,7 +5,7 @@
 ### Core tables (001_schema.sql)
 
 ```sql
-festivals    id, name, slug, location, start_date, end_date, created_at
+festivals    id, name, slug, location, start_date, end_date, timetable_announced, published (default false), created_at
 stages       id, festival_id, name, sort_order
 sets         id, festival_id, stage_id (nullable), artist_name, day,
              start_time (nullable), end_time (nullable), is_live, awakenings_url
@@ -33,6 +33,7 @@ festival_requests  id, user_id, raw_name, region (nullable), notified_at (nullab
 ```
 
 - `015_festival_requests_notified_at.sql` — adds `notified_at` to `festival_requests` (dedup pattern, same as `festival_follows`)
+- `016_artist_enrichment.sql` — adds enrichment columns to `artists` (`image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`, `discogs_id`, `enriched_at`) and `published boolean` to `festivals`
 
 ## RLS Summary
 
@@ -48,7 +49,7 @@ URL and anon key: `.env.local` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KE
 The `useSets` hook joins through `set_artists → artists` to fetch bios:
 
 ```
-.select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective))')
+.select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective, image_url, instagram_url, soundcloud_url, soundcloud_embed_url, bandcamp_url))')
 ```
 
 Service worker caches `artists` and `set_artists` tables for offline access.

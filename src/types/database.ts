@@ -6,6 +6,7 @@ export type Festival = {
   start_date: string
   end_date: string
   timetable_announced: boolean
+  published: boolean
   created_at: string
 }
 
@@ -35,6 +36,11 @@ export type SetArtistWithBio = {
     bio: string | null
     source_url: string | null
     is_collective: boolean
+    image_url: string | null
+    instagram_url: string | null
+    soundcloud_url: string | null
+    soundcloud_embed_url: string | null
+    bandcamp_url: string | null
   }
 }
 
@@ -65,6 +71,13 @@ export type Artist = {
   is_collective: boolean
   bio: string | null
   source_url: string | null
+  image_url: string | null
+  instagram_url: string | null
+  soundcloud_url: string | null
+  soundcloud_embed_url: string | null
+  bandcamp_url: string | null
+  discogs_id: number | null
+  enriched_at: string | null
   created_at: string
 }
 

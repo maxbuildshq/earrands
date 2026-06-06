@@ -1,4 +1,4 @@
-# scripts/ — Ingest, Notify, Artist Parsing
+# scripts/ — Ingest, Notify, Artist Parsing, Enrichment
 
 ## NPM Scripts
 
@@ -24,6 +24,18 @@ npm run notify -- --festival=<slug> --dry-run          # preview recipients, no 
 npm run notify -- --list-requests                      # list all pending requests + emails
 npm run notify -- --festival=<slug> --match-requests="<term>"
 npm run notify -- --festival=<slug> --match-requests="<term>" --dry-run
+
+# Artist enrichment (images, social links, SoundCloud embeds)
+npm run enrich                                         # enrich all unenriched artists
+npm run enrich -- --festival=<slug>                    # one festival only
+npm run enrich -- --artist="Speedy J"                  # single artist (testing)
+npm run enrich -- --dry-run                            # preview, no DB writes
+npm run enrich -- --force                              # re-enrich all (ignore enriched_at)
+npm run enrich -- --limit=30                           # process max N artists (pace Google quota)
+npm run enrich -- --resume                             # continue from last saved progress
+npm run enrich -- --fields=bandcamp                    # only fetch specific fields
+npm run enrich -- --fields=instagram,image             # comma-separated
+npm run enrich -- --apply=enrichment-review/X.json     # apply reviewed file to DB
 ```
 
 ## Adding a Festival (automated ingest)
@@ -107,3 +119,52 @@ Parsing rules (priority order):
 8. `x` (case-sensitive, space-x-space — won't match "DAX J")
 9. `&`
 10. Solo
+
+## Artist Enrichment
+
+Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`.
+
+### Pipeline flow per artist
+
+1. **Brave Search** → find SoundCloud profile URL (`"<name>" dj music site:soundcloud.com`)
+2. **Brave Search** → (if IG still missing) find Instagram (`"<name>" dj music site:instagram.com`)
+3. **Discogs** → supplementary image, Bandcamp URL, SC/IG fallback
+4. **SoundCloud profile scrape** → extract image, Instagram cross-ref from bio/links; set profile URL as embed
+5. **SoundCloud oEmbed** → validate embed URL
+
+Skips combo/temporary artist entries (B2B placeholders with `is_collective: false` + `&`/`b2b`/`vs` in sort_name).
+
+### Rate limits
+
+Brave Search: **2,000 queries/month** free tier (no credit card required). Discogs: 60 req/min. SoundCloud scrape/oEmbed: throttled to ~1 req/sec. Google Custom Search kept as fallback (`google-search.ts`) but unused by default.
+
+### Review workflow
+
+1. `npm run enrich -- --festival=<slug>` → writes `enrichment-review/<slug>.json`
+2. Human reviews/edits the JSON (fix wrong matches, remove false positives)
+3. `npm run enrich -- --apply=enrichment-review/<slug>.json` → writes to DB
+
+### Env vars needed
+
+```
+BRAVE_API_KEY=...            # Brave Search API key (free, 2000 queries/month)
+DISCOGS_CONSUMER_KEY=...     # Discogs consumer key (free)
+DISCOGS_CONSUMER_SECRET=...  # Discogs consumer secret (free)
+# Optional fallback (unused by default):
+# GOOGLE_API_KEY=...         # Google Custom Search JSON API key
+# GOOGLE_CSE_ID=...          # Custom Search Engine ID
+```
+
+### File structure
+
+```
+scripts/lib/enrichment/
+  types.ts          # EnrichmentResult, ReviewFile, ProgressFile, ArtistRow
+  pipeline.ts       # orchestration per artist (source-agnostic)
+  brave-search.ts   # Brave Search API wrapper (primary web search)
+  google-search.ts  # Google Custom Search API wrapper (fallback, unused by default)
+  soundcloud.ts     # profile scraping + oEmbed validation
+  discogs.ts        # search + images + URLs (supplementary)
+  name-utils.ts     # query construction, URL parsing, combo detection
+  review.ts         # JSON review file generation + apply + resume
+```

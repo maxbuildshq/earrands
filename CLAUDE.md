@@ -4,6 +4,8 @@
 
 Mobile-first PWA for electronic music festival attendees — phones at live festivals, outdoors in sunlight, dark warehouses, bad networks, limited battery. Three things: **Timetable**, **"Going to"** marks, **Ratings**. Not social (no friends, no GPS, no push notifications). Next step: iOS app.
 
+**Competitor: Resident Advisor (RA).** Do not use RA as a data source, do not link to RA, do not recommend RA in any feature.
+
 Every UI change must hold up against: bad network (PWA cache-first), bright sunlight (high contrast), offline browsing (service worker), auth required only for marks and ratings.
 
 ## Design Direction
@@ -62,7 +64,7 @@ Full rationale in `docs/decisions/`. These cause bugs if forgotten:
 - Date from string: always `T12:00:00` to avoid UTC shift bugs ([002](docs/decisions/002-date-timezone.md))
 - `day` field = festival day, not calendar day; after-midnight cutoff = `07:00` ([003](docs/decisions/003-cross-midnight-sets.md))
 - `FeedbackButton` must portal to `document.body` — header `backdrop-filter` clips `fixed` children ([004](docs/decisions/004-feedback-portal.md))
-- Combo bio vs individual bio display — `resolveBios()` in `SetSheet.tsx` ([005](docs/decisions/005-combo-bio.md))
+- Combo bio vs individual bio display — `resolveArtists()` in `SetSheet.tsx` ([005](docs/decisions/005-combo-bio.md))
 - Deploy: `npx wrangler deploy`, NOT `wrangler pages deploy` ([006](docs/decisions/006-wrangler-deploy.md))
 - Marketing consent checkbox: unchecked by default (GDPR) ([007](docs/decisions/007-marketing-consent.md))
 
@@ -87,6 +89,26 @@ Tapping a `SetCard` opens a `SetSheet` (artist bios + action buttons). Going/Rat
 ### Lineup-only festivals
 
 Set `timetable_announced: false` on the festival row. `SchedulePage` renders `LineupView` automatically. When the timetable drops, flip to `true` via SQL and run `npm run notify -- --festival=<slug>`.
+
+### Festival publishing
+
+`festivals.published` (boolean, default `false`) controls visibility to end users. New festivals start unpublished (staging). The festival list query filters on `published = true`. Direct slug access still works (for QA). Workflow: add festival data → enrich artists → QA → set `published = true` → notify followers.
+
+### Artist enrichment
+
+`SetSheet` displays artist images, social links (Instagram, SoundCloud, Bandcamp), and an embedded SoundCloud player — all gated on data availability per artist. The enrichment pipeline populates `artists.image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`.
+
+```bash
+npm run enrich -- --festival=<slug>               # enrich artists for one festival
+npm run enrich -- --artist="Speedy J"             # single artist (testing)
+npm run enrich -- --dry-run                       # preview only
+npm run enrich -- --limit=30                      # pace Google quota (100/day free)
+npm run enrich -- --resume                        # continue from saved progress
+npm run enrich -- --fields=bandcamp               # only fetch specific fields
+npm run enrich -- --apply=enrichment-review/X.json  # apply reviewed file to DB
+```
+
+Pipeline: Brave Search → Discogs (supplementary) → SoundCloud profile scrape → oEmbed validation. Outputs a review JSON at `enrichment-review/<slug>.json` for human verification before DB write. See `scripts/CLAUDE.md` for full details.
 
 ## Environment
 

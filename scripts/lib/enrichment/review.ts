@@ -1,0 +1,75 @@
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import type { EnrichmentResult, ReviewFile, ProgressFile } from './types.js'
+
+const REVIEW_DIR = 'enrichment-review'
+
+function ensureDir() {
+  if (!existsSync(REVIEW_DIR)) mkdirSync(REVIEW_DIR, { recursive: true })
+}
+
+// ── Review file ──────────────────────────────────────────────────────────
+
+export function writeReviewFile(festival: string | null, results: EnrichmentResult[]): string {
+  ensureDir()
+  const slug = festival ?? 'all'
+  const path = `${REVIEW_DIR}/${slug}.json`
+
+  const enriched = results.filter(r => r.soundcloud_url || r.instagram_url || r.image_url)
+  const needsReview = results.filter(r => r.needs_review)
+  const notFound = results.filter(r => !r.soundcloud_url && !r.instagram_url && !r.image_url && !r.review_notes.includes('Skipped: combo/temporary entry'))
+
+  const review: ReviewFile = {
+    generated_at: new Date().toISOString(),
+    festival,
+    stats: {
+      total: results.length,
+      enriched: enriched.length,
+      needs_review: needsReview.length,
+      not_found: notFound.length,
+    },
+    artists: results,
+  }
+
+  writeFileSync(path, JSON.stringify(review, null, 2))
+  return path
+}
+
+export function readReviewFile(path: string): ReviewFile {
+  if (!existsSync(path)) {
+    throw new Error(`Review file not found: ${path}`)
+  }
+  return JSON.parse(readFileSync(path, 'utf-8'))
+}
+
+// ── Progress file (for resume) ───────────────────────────────────────────
+
+export function progressPath(festival: string | null): string {
+  ensureDir()
+  const slug = festival ?? 'all'
+  return `${REVIEW_DIR}/${slug}-progress.json`
+}
+
+export function loadProgress(festival: string | null): ProgressFile {
+  const path = progressPath(festival)
+  if (!existsSync(path)) {
+    return { festival, completed_sort_names: [], updated_at: new Date().toISOString() }
+  }
+  return JSON.parse(readFileSync(path, 'utf-8'))
+}
+
+export function saveProgress(festival: string | null, completedSortNames: string[]): void {
+  const path = progressPath(festival)
+  const progress: ProgressFile = {
+    festival,
+    completed_sort_names: completedSortNames,
+    updated_at: new Date().toISOString(),
+  }
+  writeFileSync(path, JSON.stringify(progress, null, 2))
+}
+
+export function clearProgress(festival: string | null): void {
+  const path = progressPath(festival)
+  if (existsSync(path)) {
+    writeFileSync(path, JSON.stringify({ festival, completed_sort_names: [], updated_at: new Date().toISOString() }, null, 2))
+  }
+}
