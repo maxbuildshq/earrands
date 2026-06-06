@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import type { SetWithStage } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { GoingToggle } from '../actions/GoingToggle'
@@ -17,39 +17,153 @@ function formatTime(time: string) {
   return time.slice(0, 5)
 }
 
-/**
- * Resolve bios for a set, handling:
- * 1. Individual bios only (Awakenings pattern)
- * 2. Combo bio only (Dekmantel duo)
- * 3. Combo bio + some individual bios (Dekmantel B2B with overlap)
- * 4. Partial data (some artists have bios, others don't)
- */
-function resolveBios(set: SetWithStage) {
-  const artists = set.set_artists ?? []
-  const sorted = [...artists].sort((a, b) => a.billing_order - b.billing_order)
+type ResolvedArtist = {
+  name: string
+  bio: string | null
+  image_url: string | null
+  instagram_url: string | null
+  soundcloud_url: string | null
+  soundcloud_embed_url: string | null
+  bandcamp_url: string | null
+}
 
-  // Check for a combo bio: an artist entry whose name matches the full set artist_name
-  const comboBio = sorted.find(
+function resolveArtists(set: SetWithStage): {
+  comboBio: string | null
+  artists: ResolvedArtist[]
+} {
+  const setArtists = set.set_artists ?? []
+  const sorted = [...setArtists].sort((a, b) => a.billing_order - b.billing_order)
+
+  const comboEntry = sorted.find(
     sa => sa.artists.name.toLowerCase() === set.artist_name.toLowerCase() && sa.artists.bio
   )
 
-  // Individual artists (excluding the combo entry itself)
   const individuals = sorted.filter(
-    sa => sa.artists.name.toLowerCase() !== set.artist_name.toLowerCase() && sa.artists.bio
+    sa => sa.artists.name.toLowerCase() !== set.artist_name.toLowerCase()
   )
 
-  // If we have a combo bio but no individuals, check if there's a single solo artist
-  // whose name matches the set name (solo set)
   const isSolo = sorted.length === 1 && sorted[0].role === 'solo'
 
-  if (isSolo && sorted[0].artists.bio) {
-    return { comboBio: null, individuals: [{ name: sorted[0].artists.name, bio: sorted[0].artists.bio }] }
+  if (isSolo) {
+    const a = sorted[0].artists
+    return {
+      comboBio: null,
+      artists: [{ name: a.name, bio: a.bio, image_url: a.image_url, instagram_url: a.instagram_url, soundcloud_url: a.soundcloud_url, soundcloud_embed_url: a.soundcloud_embed_url, bandcamp_url: a.bandcamp_url }],
+    }
   }
 
   return {
-    comboBio: comboBio?.artists.bio ?? null,
-    individuals: individuals.map(sa => ({ name: sa.artists.name, bio: sa.artists.bio! })),
+    comboBio: comboEntry?.artists.bio ?? null,
+    artists: individuals.map(sa => ({
+      name: sa.artists.name,
+      bio: sa.artists.bio,
+      image_url: sa.artists.image_url,
+      instagram_url: sa.artists.instagram_url,
+      soundcloud_url: sa.artists.soundcloud_url,
+      soundcloud_embed_url: sa.artists.soundcloud_embed_url,
+      bandcamp_url: sa.artists.bandcamp_url,
+    })),
   }
+}
+
+function SocialLinks({ artist }: { artist: ResolvedArtist }) {
+  const links: Array<{ url: string; label: string; icon: React.ReactNode }> = []
+
+  if (artist.instagram_url) {
+    links.push({
+      url: artist.instagram_url,
+      label: 'Instagram',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="2" width="20" height="20" rx="5" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+        </svg>
+      ),
+    })
+  }
+
+  if (artist.soundcloud_url) {
+    links.push({
+      url: artist.soundcloud_url,
+      label: 'SoundCloud',
+      icon: (
+        <img src="/soundcloud-icon.png" width="16" height="16" alt="SoundCloud" style={{ objectFit: 'contain' }} />
+      ),
+    })
+  }
+
+  if (artist.bandcamp_url) {
+    links.push({
+      url: artist.bandcamp_url,
+      label: 'Bandcamp',
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M0 18.75l7.437-13.5H24l-7.438 13.5H0z" />
+        </svg>
+      ),
+    })
+  }
+
+  if (links.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-2">
+      {links.map(link => (
+        <a
+          key={link.label}
+          href={link.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-8 h-8 flex items-center justify-center border border-border text-text-secondary hover:text-accent hover:border-accent transition-colors"
+          title={link.label}
+          onClick={e => e.stopPropagation()}
+        >
+          {link.icon}
+        </a>
+      ))}
+    </div>
+  )
+}
+
+function ArtistImage({ url, name, size = 120 }: { url: string; name: string; size?: number }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+  return (
+    <img
+      src={url}
+      alt={name}
+      width={size}
+      height={size}
+      className="rounded-full object-cover border-2 border-border"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+      loading="lazy"
+    />
+  )
+}
+
+function SoundCloudEmbed({ embedUrl }: { embedUrl: string }) {
+  const [failed, setFailed] = useState(false)
+  if (failed) return null
+
+  const src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(embedUrl)}&color=%23CCFF00&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false`
+
+  return (
+    <div className="mt-3">
+      <iframe
+        width="100%"
+        height="166"
+        scrolling="no"
+        frameBorder="no"
+        allow="autoplay"
+        src={src}
+        title="SoundCloud player"
+        onError={() => setFailed(true)}
+        className="rounded"
+      />
+    </div>
+  )
 }
 
 export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose }: Props) {
@@ -60,8 +174,11 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
   const touchCurrentY = useRef(0)
   const isDragging = useRef(false)
 
-  const { comboBio, individuals } = resolveBios(set)
-  const hasBio = comboBio || individuals.length > 0
+  const { comboBio, artists: resolvedArtists } = resolveArtists(set)
+  const hasBio = comboBio || resolvedArtists.some(a => a.bio)
+  const heroImage = resolvedArtists.length === 1 ? resolvedArtists[0].image_url : null
+  const hasEnrichment = resolvedArtists.some(a => a.image_url || a.instagram_url || a.soundcloud_url || a.bandcamp_url || a.soundcloud_embed_url)
+  const heroEmbed = resolvedArtists.length === 1 ? resolvedArtists[0].soundcloud_embed_url : null
 
   // Close on Escape key
   useEffect(() => {
@@ -131,9 +248,26 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
           <div className="w-10 h-1 bg-border rounded-full" />
         </div>
 
-        {/* Header: set details + close button */}
+        {/* Header: image left + set details right + close button */}
         <div className="px-4 pb-3 shrink-0">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            {/* Artist image(s) on the left */}
+            {heroImage && (
+              <div className="shrink-0">
+                <ArtistImage url={heroImage} name={set.artist_name} size={72} />
+              </div>
+            )}
+            {!heroImage && resolvedArtists.length > 1 && resolvedArtists.some(a => a.image_url) && (
+              <div className="flex shrink-0">
+                {resolvedArtists.filter(a => a.image_url).map((a, i) => (
+                  <div key={a.name} className={i > 0 ? '-ml-3' : ''} style={{ zIndex: resolvedArtists.length - i }}>
+                    <ArtistImage url={a.image_url!} name={a.name} size={56} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Title block */}
             <div className="min-w-0 flex-1">
               <h2 className="font-mono font-bold text-lg text-text-primary leading-tight">
                 {set.artist_name}
@@ -171,45 +305,79 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
             </button>
           </div>
 
-          {/* Action buttons right after set details */}
-          {user && (
-            <div className="flex items-center gap-1 mt-3">
-              <GoingToggle isGoing={isGoing} onToggle={onToggleGoing} />
-              <RatingButtons rating={rating} onRate={onRate} />
-            </div>
-          )}
+          {/* Social links (left) + action buttons (right) */}
+          <div className="flex items-center justify-between gap-2 mt-3">
+            {resolvedArtists.length === 1 ? (
+              <SocialLinks artist={resolvedArtists[0]} />
+            ) : <div />}
+
+            {user ? (
+              <div className="flex items-center gap-1">
+                <GoingToggle isGoing={isGoing} onToggle={onToggleGoing} />
+                <RatingButtons rating={rating} onRate={onRate} />
+              </div>
+            ) : <div />}
+          </div>
         </div>
 
         {/* Divider */}
-        {hasBio && <div className="h-px bg-border mx-4 shrink-0" />}
+        {(hasBio || hasEnrichment) && <div className="h-px bg-border mx-4 shrink-0" />}
 
-        {/* Scrollable bio content */}
-        {hasBio && (
+        {/* Scrollable content: bios + embeds */}
+        {(hasBio || hasEnrichment) && (
           <div className="overflow-y-auto px-4 py-3 flex-1 min-h-0">
-            {/* Combo bio (describes the specific set/collaboration) */}
+            {/* Combo bio */}
             {comboBio && (
               <div className="mb-4">
-                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-line">
+                <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-line">
                   {comboBio}
                 </p>
               </div>
             )}
 
-            {/* Individual artist bios */}
-            {individuals.map((artist, idx) => (
-              <div key={artist.name} className={idx > 0 || comboBio ? 'mt-4' : ''}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="font-mono text-xs tracking-widest text-text-secondary uppercase">
-                    {artist.name}
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
+            {/* Solo artist: SoundCloud embed before bio */}
+            {heroEmbed && <SoundCloudEmbed embedUrl={heroEmbed} />}
+
+            {/* Individual artist sections */}
+            {resolvedArtists.map((artist, idx) => {
+              const hasContent = artist.bio || (resolvedArtists.length > 1 && (artist.instagram_url || artist.soundcloud_url || artist.bandcamp_url || artist.soundcloud_embed_url))
+              if (!hasContent && resolvedArtists.length === 1) return null
+              if (!hasContent) return null
+
+              return (
+                <div key={artist.name} className={idx > 0 || comboBio || heroEmbed ? 'mt-4' : ''}>
+                  {/* Artist name divider (only for multi-artist sets) */}
+                  {resolvedArtists.length > 1 && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="font-mono text-xs tracking-widest text-text-secondary uppercase">
+                        {artist.name}
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+
+                  {/* Multi-artist: social links per artist */}
+                  {resolvedArtists.length > 1 && (
+                    <div className="mb-2">
+                      <SocialLinks artist={artist} />
+                    </div>
+                  )}
+
+                  {/* Bio */}
+                  {artist.bio && (
+                    <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-line">
+                      {artist.bio}
+                    </p>
+                  )}
+
+                  {/* Multi-artist: individual SC embeds */}
+                  {resolvedArtists.length > 1 && artist.soundcloud_embed_url && (
+                    <SoundCloudEmbed embedUrl={artist.soundcloud_embed_url} />
+                  )}
                 </div>
-                <p className="text-sm text-text-primary leading-relaxed whitespace-pre-line">
-                  {artist.bio}
-                </p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ export function useFestivals() {
       const { data, error } = await supabase
         .from('festivals')
         .select('*')
+        .eq('published', true)
         .order('start_date', { ascending: false })
       if (error) throw error
       return data
@@ -57,7 +58,7 @@ export function useSets(festivalId: string | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('sets')
-        .select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective))')
+        .select('*, stages(name, sort_order), set_artists(billing_order, role, artists(name, bio, source_url, is_collective, image_url, instagram_url, soundcloud_url, soundcloud_embed_url, bandcamp_url))')
         .eq('festival_id', festivalId!)
         .order('start_time')
       if (error) throw error
