@@ -59,15 +59,17 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
         set_count: sets.length,
         share_code: code,
       })
-      // File sharing via Web Share API only works reliably on mobile (iOS/Android).
-      // On desktop macOS, canShare may return true but most apps only receive
-      // text/URL — not the image file. So we restrict to touch devices.
-      const isMobile = navigator.maxTouchPoints > 0
-      if (isMobile && navigator.canShare?.({ files: [file] })) {
+      if (navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
           title: `My ${festivalName} schedule`,
           text: `My ${festivalName} lineup 🎵\n${shareUrl}`,
+        })
+      } else if (navigator.share) {
+        await navigator.share({
+          title: `My ${festivalName} schedule`,
+          text: `My ${festivalName} lineup 🎵`,
+          url: shareUrl,
         })
       } else {
         downloadBlob(blob, filename)
@@ -83,11 +85,8 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     const blob = await getBlob()
     if (!blob) return
     posthog.capture('schedule_downloaded', { festival_name: festivalName, template: TEMPLATES[templateIdx].id })
-    // On iOS, <a download> shows a file preview instead of saving to Photos.
-    // navigator.share with just the file presents the native "Save Image" sheet.
-    const isMobile = navigator.maxTouchPoints > 0
     const file = new File([blob], filename, { type: 'image/png' })
-    if (isMobile && navigator.canShare?.({ files: [file] })) {
+    if (navigator.canShare?.({ files: [file] })) {
       try { await navigator.share({ files: [file] }) } catch { downloadBlob(blob, filename) }
     } else {
       downloadBlob(blob, filename)
