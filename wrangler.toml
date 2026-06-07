@@ -1,8 +1,9 @@
 name = "festival-pulse"
 compatibility_date = "2026-05-24"
 
-[[custom_domains]]
-hostname = "earrands.app"
+[[routes]]
+pattern = "earrands.app"
+custom_domain = true
 
 [assets]
 directory = "./dist"
