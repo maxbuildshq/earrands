@@ -134,6 +134,8 @@ export function MySchedulePage() {
       {shareOpen && festival && (
         <ShareScheduleSheet
           festivalName={festival.name}
+          festivalId={festival.id}
+          festivalSlug={festival.slug}
           sets={mySets}
           onClose={() => setShareOpen(false)}
         />

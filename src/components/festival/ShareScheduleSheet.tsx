@@ -2,19 +2,23 @@ import { useEffect, useRef, useState } from 'react'
 import posthog from 'posthog-js'
 import { BottomSheet } from '../common/BottomSheet'
 import { TEMPLATES, drawSchedule, buildShareFilename } from '../../lib/shareImage'
+import { useCreateSharedSchedule } from '../../hooks/useSharedSchedule'
 import type { SetWithStage } from '../../types/database'
 
 type Props = {
   festivalName: string
+  festivalId: string
+  festivalSlug: string
   sets: SetWithStage[]
   onClose: () => void
 }
 
-export function ShareScheduleSheet({ festivalName, sets, onClose }: Props) {
+export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, sets, onClose }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [templateIdx, setTemplateIdx] = useState(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const createShare = useCreateSharedSchedule()
 
   // Redraw on template change (and once webfonts are ready, so monospace renders correctly).
   useEffect(() => {
@@ -40,6 +44,12 @@ export function ShareScheduleSheet({ festivalName, sets, onClose }: Props) {
     setBusy(true)
     setError('')
     try {
+      const code = await createShare.mutateAsync({
+        festivalId,
+        setIds: sets.map(s => s.id),
+      })
+      const shareUrl = `https://earrands.app/app/festivals/${festivalSlug}/shared/${code}`
+
       const blob = await getBlob()
       if (!blob) throw new Error('render failed')
       const file = new File([blob], filename, { type: 'image/png' })
@@ -47,6 +57,7 @@ export function ShareScheduleSheet({ festivalName, sets, onClose }: Props) {
         festival_name: festivalName,
         template: TEMPLATES[templateIdx].id,
         set_count: sets.length,
+        share_code: code,
       })
       // File sharing via Web Share API only works reliably on mobile (iOS/Android).
       // On desktop macOS, canShare may return true but most apps only receive
@@ -57,7 +68,7 @@ export function ShareScheduleSheet({ festivalName, sets, onClose }: Props) {
           files: [file],
           title: `My ${festivalName} schedule`,
           text: `My ${festivalName} lineup 🎵`,
-          url: 'https://earrands.app',
+          url: shareUrl,
         })
       } else {
         downloadBlob(blob, filename)
