@@ -83,7 +83,15 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     const blob = await getBlob()
     if (!blob) return
     posthog.capture('schedule_downloaded', { festival_name: festivalName, template: TEMPLATES[templateIdx].id })
-    downloadBlob(blob, filename)
+    // On iOS, <a download> shows a file preview instead of saving to Photos.
+    // navigator.share with just the file presents the native "Save Image" sheet.
+    const isMobile = navigator.maxTouchPoints > 0
+    const file = new File([blob], filename, { type: 'image/png' })
+    if (isMobile && navigator.canShare?.({ files: [file] })) {
+      try { await navigator.share({ files: [file] }) } catch { downloadBlob(blob, filename) }
+    } else {
+      downloadBlob(blob, filename)
+    }
   }
 
   return (
