@@ -67,8 +67,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
         await navigator.share({
           files: [file],
           title: `My ${festivalName} schedule`,
-          text: `My ${festivalName} lineup 🎵`,
-          url: shareUrl,
+          text: `My ${festivalName} lineup 🎵\n${shareUrl}`,
         })
       } else {
         downloadBlob(blob, filename)
