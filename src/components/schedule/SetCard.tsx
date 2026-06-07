@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import type { SetWithStage } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { GoingToggle } from '../actions/GoingToggle'
 import { RatingButtons } from '../actions/RatingButtons'
+import { BottomSheet } from '../common/BottomSheet'
+import { AuthPrompt } from '../common/AuthPrompt'
 
 type Props = {
   set: SetWithStage
@@ -20,64 +23,76 @@ function formatTime(time: string) {
 
 export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, onOpenSheet, showConflict }: Props) {
   const { user } = useAuth()
+  const [authPromptOpen, setAuthPromptOpen] = useState(false)
+
+  const handleToggleGoing = () => {
+    if (!user) { setAuthPromptOpen(true); return }
+    onToggleGoing()
+  }
+  const handleRate = (value: -1 | 1) => {
+    if (!user) { setAuthPromptOpen(true); return }
+    onRate(value)
+  }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onOpenSheet}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
-      className={`relative bg-surface-raised border p-3 transition-colors cursor-pointer hover:bg-surface-hover ${
-        isNow ? 'border-acid/50' : 'border-border'
-      } ${showConflict ? 'border-conflict/60' : ''}`}
-    >
-      {isNow && (
-        <div className="absolute top-0 left-0 w-1 h-full bg-acid animate-pulse" />
-      )}
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onOpenSheet}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
+        className={`relative bg-surface-raised border p-3 transition-colors cursor-pointer hover:bg-surface-hover ${
+          isNow ? 'border-acid/50 shadow-[0_0_15px_rgba(204,255,0,0.3)]' : 'border-border'
+        } ${showConflict ? 'border-conflict' : ''}`}
+      >
+        {isNow && (
+          <div className="absolute top-0 left-0 w-1 h-full bg-acid animate-pulse" />
+        )}
+        {showConflict && !isNow && (
+          <div className="absolute top-0 left-0 w-1 h-full bg-conflict" />
+        )}
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <h3 className={`font-mono font-bold text-base truncate ${isNow ? 'text-acid' : 'text-text-primary'}`}>
-              {set.artist_name}
-            </h3>
-            {set.is_live && (
-              <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-live text-white uppercase leading-none">
-                Live
-              </span>
-            )}
-            {isNow && (
-              <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-acid text-surface uppercase leading-none">
-                Now
-              </span>
-            )}
-            {showConflict && (
-              <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-conflict text-surface uppercase leading-none">
-                Conflict
-              </span>
-            )}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <h3 className={`font-mono font-bold text-base truncate ${isNow ? 'text-acid' : 'text-text-primary'}`}>
+                {set.artist_name}
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-2 text-sm text-text-secondary">
+              {set.start_time && set.end_time && (
+                <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
+              )}
+              {set.stages && set.start_time && (
+                <span className="text-border">·</span>
+              )}
+              {set.stages && (
+                <span>{set.stages.name}</span>
+              )}
+              {set.is_live && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-live text-white uppercase leading-none">
+                    Live
+                  </span>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-text-secondary">
-            {set.start_time && set.end_time && (
-              <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
-            )}
-            {set.stages && set.start_time && (
-              <span className="text-border">·</span>
-            )}
-            {set.stages && (
-              <span>{set.stages.name}</span>
-            )}
+          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <GoingToggle isGoing={isGoing} onToggle={handleToggleGoing} />
+            <RatingButtons rating={rating} onRate={handleRate} />
           </div>
         </div>
-
-        {user && (
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <GoingToggle isGoing={isGoing} onToggle={onToggleGoing} />
-            <RatingButtons rating={rating} onRate={onRate} />
-          </div>
-        )}
       </div>
-    </div>
+
+      {authPromptOpen && (
+        <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthPromptOpen(false)}>
+          <AuthPrompt message="Create an account to mark sets you're going to and rate them." />
+        </BottomSheet>
+      )}
+    </>
   )
 }

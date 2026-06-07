@@ -3,6 +3,9 @@ import type { SetWithStage } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { GoingToggle } from '../actions/GoingToggle'
 import { RatingButtons } from '../actions/RatingButtons'
+import { BottomSheet } from '../common/BottomSheet'
+import { AuthPrompt } from '../common/AuthPrompt'
+import { ImageLightbox } from '../common/ImageLightbox'
 
 type Props = {
   set: SetWithStage
@@ -88,7 +91,9 @@ function SocialLinks({ artist }: { artist: ResolvedArtist }) {
       url: artist.soundcloud_url,
       label: 'SoundCloud',
       icon: (
-        <img src="/soundcloud-icon.png" width="16" height="16" alt="SoundCloud" style={{ objectFit: 'contain' }} />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+        </svg>
       ),
     })
   }
@@ -173,6 +178,17 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
   const touchStartY = useRef(0)
   const touchCurrentY = useRef(0)
   const isDragging = useRef(false)
+  const [authPromptOpen, setAuthPromptOpen] = useState(false)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
+
+  const handleToggleGoing = () => {
+    if (!user) { setAuthPromptOpen(true); return }
+    onToggleGoing()
+  }
+  const handleRate = (value: -1 | 1) => {
+    if (!user) { setAuthPromptOpen(true); return }
+    onRate(value)
+  }
 
   const { comboBio, artists: resolvedArtists } = resolveArtists(set)
   const hasBio = comboBio || resolvedArtists.some(a => a.bio)
@@ -253,26 +269,26 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
           <div className="flex items-start gap-3">
             {/* Artist image(s) on the left */}
             {heroImage && (
-              <div className="shrink-0">
-                <ArtistImage url={heroImage} name={set.artist_name} size={72} />
-              </div>
+              <button className="shrink-0" onClick={() => setLightboxImage({ src: heroImage, alt: set.artist_name })}>
+                <ArtistImage url={heroImage} name={set.artist_name} size={150} />
+              </button>
             )}
             {!heroImage && resolvedArtists.length > 1 && resolvedArtists.some(a => a.image_url) && (
               <div className="flex shrink-0">
                 {resolvedArtists.filter(a => a.image_url).map((a, i) => (
-                  <div key={a.name} className={i > 0 ? '-ml-3' : ''} style={{ zIndex: resolvedArtists.length - i }}>
-                    <ArtistImage url={a.image_url!} name={a.name} size={56} />
-                  </div>
+                  <button key={a.name} className={i > 0 ? '-ml-3' : ''} style={{ zIndex: resolvedArtists.length - i }} onClick={() => setLightboxImage({ src: a.image_url!, alt: a.name })}>
+                    <ArtistImage url={a.image_url!} name={a.name} size={100} />
+                  </button>
                 ))}
               </div>
             )}
 
             {/* Title block */}
             <div className="min-w-0 flex-1">
-              <h2 className="font-mono font-bold text-lg text-text-primary leading-tight">
+              <h2 className="font-mono font-bold text-xl text-text-primary leading-tight">
                 {set.artist_name}
               </h2>
-              <div className="flex items-center gap-2 mt-1 text-sm text-text-secondary">
+              <div className="flex items-center gap-2 mt-1 text-base text-text-secondary">
                 {set.start_time && set.end_time && (
                   <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
                 )}
@@ -311,12 +327,10 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
               <SocialLinks artist={resolvedArtists[0]} />
             ) : <div />}
 
-            {user ? (
-              <div className="flex items-center gap-1">
-                <GoingToggle isGoing={isGoing} onToggle={onToggleGoing} />
-                <RatingButtons rating={rating} onRate={onRate} />
-              </div>
-            ) : <div />}
+            <div className="flex items-center gap-1">
+              <GoingToggle isGoing={isGoing} onToggle={handleToggleGoing} />
+              <RatingButtons rating={rating} onRate={handleRate} />
+            </div>
           </div>
         </div>
 
@@ -329,7 +343,7 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
             {/* Combo bio */}
             {comboBio && (
               <div className="mb-4">
-                <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-line">
+                <p className="text-base text-text-primary leading-relaxed whitespace-pre-line">
                   {comboBio}
                 </p>
               </div>
@@ -366,7 +380,7 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
 
                   {/* Bio */}
                   {artist.bio && (
-                    <p className="text-[15px] text-text-primary leading-relaxed whitespace-pre-line">
+                    <p className="text-base text-text-primary leading-relaxed whitespace-pre-line">
                       {artist.bio}
                     </p>
                   )}
@@ -381,6 +395,16 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose 
           </div>
         )}
       </div>
+
+      {lightboxImage && (
+        <ImageLightbox src={lightboxImage.src} alt={lightboxImage.alt} onClose={() => setLightboxImage(null)} />
+      )}
+
+      {authPromptOpen && (
+        <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthPromptOpen(false)}>
+          <AuthPrompt message="Create an account to mark sets you're going to and rate them." />
+        </BottomSheet>
+      )}
     </div>
   )
 }
