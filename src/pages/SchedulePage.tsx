@@ -54,9 +54,17 @@ export function SchedulePage() {
       })
   }, [sets, selectedDay, selectedStages])
 
+  const nowScrollIndex = useMemo(() => {
+    const firstNowIdx = filteredSets.findIndex(s =>
+      s.start_time && s.end_time && isNowPlaying(now, s.day, s.start_time, s.end_time)
+    )
+    if (firstNowIdx <= 0) return firstNowIdx
+    return firstNowIdx - 1
+  }, [filteredSets, now])
+
   useEffect(() => {
     if (!hasScrolled.current && nowRef.current) {
-      nowRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      nowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
       hasScrolled.current = true
     }
   }, [filteredSets])
@@ -132,7 +140,7 @@ export function SchedulePage() {
                   <div className="flex-1 h-px bg-border" />
                 </div>
               )}
-              <div ref={playing ? nowRef : undefined}>
+              <div ref={idx === nowScrollIndex ? nowRef : undefined}>
                 <SetCard
                   set={set}
                   isNow={playing}

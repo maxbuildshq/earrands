@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useFestival, useSets } from '../hooks/useFestivalData'
 import { useUserPlans } from '../hooks/useUserPlans'
@@ -25,6 +25,8 @@ export function MySchedulePage() {
   const now = useNow()
   const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const nowRef = useRef<HTMLDivElement>(null)
+  const hasScrolled = useRef(false)
 
   const mySets = useMemo(() => {
     return sets
@@ -43,6 +45,21 @@ export function MySchedulePage() {
       }
     }
     return ids
+  }, [mySets])
+
+  const nowScrollIndex = useMemo(() => {
+    const firstNowIdx = mySets.findIndex(s =>
+      s.start_time && s.end_time && isNowPlaying(now, s.day, s.start_time, s.end_time)
+    )
+    if (firstNowIdx <= 0) return firstNowIdx
+    return firstNowIdx - 1
+  }, [mySets, now])
+
+  useEffect(() => {
+    if (!hasScrolled.current && nowRef.current) {
+      nowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      hasScrolled.current = true
+    }
   }, [mySets])
 
   if (mySets.length === 0) {
@@ -87,6 +104,7 @@ export function MySchedulePage() {
                 {formatDayLabel(set.day)}
               </div>
             )}
+            <div ref={i === nowScrollIndex ? nowRef : undefined}>
             <SetCard
               set={set}
               isNow={playing}
@@ -97,6 +115,7 @@ export function MySchedulePage() {
               onOpenSheet={() => setSheetSet(set)}
               showConflict={conflictIds.has(set.id)}
             />
+            </div>
           </div>
         )
       })}
