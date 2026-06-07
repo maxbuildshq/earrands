@@ -104,3 +104,13 @@ export type FestivalRequest = {
   region: string | null
   created_at: string
 }
+
+export type SharedSchedule = {
+  id: string
+  code: string
+  user_id: string
+  festival_id: string
+  set_ids: string[]
+  created_at: string
+  updated_at: string
+}
