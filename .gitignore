@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .env.local
 scraped/
+style-previews/
+enrichment-review/
