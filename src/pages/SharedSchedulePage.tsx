@@ -72,7 +72,7 @@ export function SharedSchedulePage() {
   }
 
   return (
-    <div className="pt-4 pb-20 space-y-2">
+    <div className="pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-2">
       <div className="flex items-center justify-between mb-2">
         <h1 className="font-mono font-bold text-lg text-acid tracking-tight">SHARED SCHEDULE</h1>
         <span className="text-text-secondary text-sm font-mono">{sharedSets.length} sets</span>
@@ -114,7 +114,7 @@ export function SharedSchedulePage() {
         </Link>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-surface/95 backdrop-blur-sm border-t border-border">
+      <div className="fixed bottom-0 left-0 right-0 pt-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-surface/95 backdrop-blur-sm border-t border-border">
         <button
           onClick={handleSaveAll}
           disabled={allAlreadySaved || importSchedule.isPending}
