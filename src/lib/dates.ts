@@ -29,6 +29,32 @@ export function getDays(startDate: string, endDate: string): string[] {
   return days
 }
 
+/** Return the festival day matching "now" in Europe/Amsterdam, accounting for the 07:00 cutoff. */
+export function getCurrentFestivalDay(days: string[], now: Date = new Date()): string | undefined {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Amsterdam',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+  const parts = fmt.formatToParts(now)
+  const year = parts.find(p => p.type === 'year')!.value
+  const month = parts.find(p => p.type === 'month')!.value
+  const day = parts.find(p => p.type === 'day')!.value
+  const hour = parts.find(p => p.type === 'hour')!.value
+  const minute = parts.find(p => p.type === 'minute')!.value
+
+  let calendarDate = `${year}-${month}-${day}`
+  const timeStr = `${hour}:${minute}`
+
+  if (timeStr < AFTER_MIDNIGHT_CUTOFF) {
+    const d = new Date(`${calendarDate}T12:00:00`)
+    d.setDate(d.getDate() - 1)
+    calendarDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  return days.includes(calendarDate) ? calendarDate : undefined
+}
+
 /** Format a date string to short display: "SAT 16 MAY" */
 export function formatDayLabel(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00')

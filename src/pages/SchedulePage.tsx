@@ -10,7 +10,7 @@ import { StageFilter } from '../components/schedule/StageFilter'
 import { SetCard } from '../components/schedule/SetCard'
 import { SetSheet } from '../components/schedule/SetSheet'
 import { LineupView } from '../components/schedule/LineupView'
-import { getDays, toSortableTime, isAfterMidnight } from '../lib/dates'
+import { getDays, toSortableTime, isAfterMidnight, getCurrentFestivalDay } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
 export function SchedulePage() {
@@ -31,10 +31,10 @@ export function SchedulePage() {
   const nowRef = useRef<HTMLDivElement>(null)
   const hasScrolled = useRef(false)
 
-  // Set initial day when festival loads
+  // Set initial day: prefer current festival day, fall back to first day
   useEffect(() => {
     if (days.length > 0 && !selectedDay) {
-      setSelectedDay(days[0])
+      setSelectedDay(getCurrentFestivalDay(days, now) ?? days[0])
     }
   }, [days, selectedDay])
 
@@ -115,6 +115,25 @@ export function SchedulePage() {
 
   return (
     <div className="pt-4">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h1 className="font-mono font-bold text-lg text-acid tracking-tight truncate">
+          {festival.name}
+        </h1>
+        {festival.location && (
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(festival.location)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 shrink-0 text-text-secondary hover:text-acid transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <span className="text-sm font-mono truncate max-w-[160px]">{festival.location}</span>
+          </a>
+        )}
+      </div>
       <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
       <StageFilter
         stages={stages}
