@@ -15,8 +15,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 bg-surface/95 backdrop-blur-sm border-b border-border pt-[env(safe-area-inset-top)]">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link to="/" className="font-mono font-bold text-acid text-sm tracking-tight">
-          earrands
+        <Link to="/" className="font-mono font-bold text-acid text-base tracking-tight">
+          EARRANDS
         </Link>
 
         <nav className="flex items-center gap-1">

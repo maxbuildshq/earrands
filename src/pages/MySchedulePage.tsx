@@ -7,7 +7,7 @@ import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { SetCard } from '../components/schedule/SetCard'
 import { SetSheet } from '../components/schedule/SetSheet'
 import { ShareScheduleSheet } from '../components/festival/ShareScheduleSheet'
-import { formatDayLabel } from '../lib/dates'
+import { formatDayLabel, getCurrentFestivalDay, getDays } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
 function hasConflict(a: SetWithStage, b: SetWithStage): boolean {
@@ -26,6 +26,7 @@ export function MySchedulePage() {
   const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const nowRef = useRef<HTMLDivElement>(null)
+  const dayRef = useRef<HTMLDivElement>(null)
   const hasScrolled = useRef(false)
 
   const mySets = useMemo(() => {
@@ -47,6 +48,12 @@ export function MySchedulePage() {
     return ids
   }, [mySets])
 
+  const currentDay = useMemo(() => {
+    if (!festival) return undefined
+    const days = getDays(festival.start_date, festival.end_date)
+    return getCurrentFestivalDay(days, now)
+  }, [festival, now])
+
   const nowScrollIndex = useMemo(() => {
     const firstNowIdx = mySets.findIndex(s =>
       s.start_time && s.end_time && isNowPlaying(now, s.day, s.start_time, s.end_time)
@@ -56,8 +63,10 @@ export function MySchedulePage() {
   }, [mySets, now])
 
   useEffect(() => {
-    if (!hasScrolled.current && nowRef.current) {
-      nowRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (hasScrolled.current) return
+    const target = nowRef.current ?? dayRef.current
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
       hasScrolled.current = true
     }
   }, [mySets])
@@ -100,7 +109,10 @@ export function MySchedulePage() {
         return (
           <div key={set.id}>
             {showDayHeader && (
-              <div className="font-mono text-xs text-text-secondary uppercase tracking-wider pt-3 pb-1 border-b border-border mb-2">
+              <div
+                ref={set.day === currentDay ? dayRef : undefined}
+                className="font-mono text-xs text-text-secondary uppercase tracking-wider pt-3 pb-1 border-b border-border mb-2"
+              >
                 {formatDayLabel(set.day)}
               </div>
             )}
