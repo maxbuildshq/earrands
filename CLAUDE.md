@@ -8,6 +8,10 @@ Mobile-first PWA for electronic music festival attendees — phones at live fest
 
 Every UI change must hold up against: bad network (PWA cache-first), bright sunlight (high contrast), offline browsing (service worker), auth required only for marks and ratings.
 
+## Brand
+
+Voice, positioning, and copy rules: [`docs/brand.md`](docs/brand.md). Read before writing any user-facing copy. The one test: *would this feel out of place on a flyer for a night at Shelter?*
+
 ## Design Direction
 
 Dark, raw, industrial brutalist — techno festival, not a startup dashboard.
