@@ -148,14 +148,14 @@ body {
 <div class="hero">${MOCK_FESTIVAL}</div>
 <div class="content">
   <div>
-    <div class="badge">Festival Pulse</div>
+    <div class="badge">earrands</div>
     <div class="festival-name">${MOCK_FESTIVAL}</div>
     <div class="tagline">My Schedule</div>
     <div class="divider"></div>
     ${rows}
   </div>
   <div class="footer">
-    <div class="footer-url">festivalpulse.app</div>
+    <div class="footer-url">earrands.app</div>
     <div class="footer-dot"></div>
   </div>
 </div>
@@ -378,7 +378,7 @@ body {
 <div class="top">
   <div class="top-bg-text">SONUS</div>
   <div class="top-header">
-    <div class="top-brand">Festival Pulse</div>
+    <div class="top-brand">earrands</div>
     <div class="top-barcode">
       ${Array.from({length: 28}, (_, i) => `<span style="height:${20 + Math.sin(i * 1.7) * 18 + Math.cos(i * 2.3) * 12}px"></span>`).join('')}
     </div>
@@ -395,7 +395,7 @@ body {
   <div class="stub-title">More sets →</div>
   ${bottomRows}
   <div class="stub-footer">
-    <div class="stub-url">festivalpulse.app</div>
+    <div class="stub-url">earrands.app</div>
     <div class="stub-qr"></div>
   </div>
 </div>
@@ -565,13 +565,13 @@ body::before {
 <div class="content">
   <div class="signal-bar"></div>
   <div class="signal-bar2"></div>
-  <div class="badge">FESTIVAL PULSE</div>
+  <div class="badge">EARRANDS</div>
   <div class="festival-name">${MOCK_FESTIVAL}</div>
   <div class="sub">SIGNAL / MY SCHEDULE</div>
   <div class="h-line"></div>
   ${rows}
   <div class="footer">
-    <div class="footer-url">festivalpulse.app</div>
+    <div class="footer-url">earrands.app</div>
     <div class="footer-rec"></div>
   </div>
 </div>
@@ -687,7 +687,7 @@ body {
   <div class="schedule-label">My Schedule — ${MOCK_SETS.length} Sets</div>
   ${rows}
   <div class="footer">
-    <div class="footer-url">festivalpulse.app</div>
+    <div class="footer-url">earrands.app</div>
     <div class="footer-num">${MOCK_SETS.length}</div>
   </div>
 </div>
@@ -865,14 +865,14 @@ body {
 </head>
 <body>
 <div class="content">
-  <div class="badge">FESTIVAL PULSE</div>
+  <div class="badge">EARRANDS</div>
   <div class="festival-name">${MOCK_FESTIVAL}</div>
   <div class="sub">MY SCHEDULE</div>
   <div class="timeline-area">
     ${columns}
   </div>
   <div class="footer">
-    <div class="footer-url">festivalpulse.app</div>
+    <div class="footer-url">earrands.app</div>
     <div class="footer-count">${MOCK_SETS.length} SETS</div>
   </div>
 </div>

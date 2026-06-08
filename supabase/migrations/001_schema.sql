@@ -1,4 +1,4 @@
--- Festival Pulse schema
+-- earrands schema
 
 create table festivals (
   id uuid primary key default gen_random_uuid(),

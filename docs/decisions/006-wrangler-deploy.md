@@ -6,7 +6,7 @@
 
 ```toml
 # wrangler.toml
-name = "festival-pulse"
+name = "earrands"
 compatibility_date = "2026-05-24"
 
 [assets]

@@ -1,4 +1,4 @@
-# Festival Pulse — Claude Context
+# earrands — Claude Context
 
 ## Product & Context
 
@@ -116,7 +116,7 @@ Secrets in `.env.local` (gitignored). Critical: `SUPABASE_SERVICE_ROLE_KEY` is s
 
 ## Deployment
 
-Cloudflare Pages via `main` branch auto-deploy (repo: `maxbuildshq/festival-pulse`). Build: `npm run build` → `dist/`. See [006](docs/decisions/006-wrangler-deploy.md) for the wrangler deploy gotcha.
+Cloudflare Pages via `main` branch auto-deploy (repo: `maxbuildshq/earrands`). Build: `npm run build` → `dist/`. See [006](docs/decisions/006-wrangler-deploy.md) for the wrangler deploy gotcha.
 
 Cloudflare env vars needed: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Do NOT add `SUPABASE_SERVICE_ROLE_KEY` to the Cloudflare dashboard.
 
