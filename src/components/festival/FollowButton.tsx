@@ -61,7 +61,7 @@ export function FollowButton({ festivalId, variant = 'icon' }: Props) {
 
       {promptOpen && (
         <BottomSheet title="GET NOTIFIED" onClose={() => setPromptOpen(false)}>
-          <AuthPrompt message="Create an account and we'll email you the moment this festival's timetable drops. No spam — just the one update you asked for." />
+          <AuthPrompt message="Create an account and we'll email you when the timetable drops." />
         </BottomSheet>
       )}
     </>

@@ -51,14 +51,14 @@ export function Header() {
               onClick={signOut}
               className="ml-2 px-3 py-1.5 text-xs font-mono text-text-secondary hover:text-text-primary border border-border hover:border-text-secondary transition-colors uppercase"
             >
-              Logout
+              Log out
             </button>
           ) : (
             <Link
               to="/login"
               className="ml-2 px-3 py-1.5 text-xs font-mono text-surface bg-acid hover:bg-acid-dim transition-colors uppercase font-bold"
             >
-              Login
+              Log in
             </Link>
           )}
         </nav>
