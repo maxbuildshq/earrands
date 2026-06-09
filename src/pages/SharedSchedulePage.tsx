@@ -146,7 +146,7 @@ export function SharedSchedulePage() {
 
       {authOpen && (
         <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthOpen(false)}>
-          <AuthPrompt message="Create an account to save this schedule and build your own." />
+          <AuthPrompt message="Create an account to save this schedule." />
         </BottomSheet>
       )}
     </div>

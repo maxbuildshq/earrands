@@ -63,12 +63,12 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
         await navigator.share({
           files: [file],
           title: `My ${festivalName} schedule`,
-          text: `My ${festivalName} lineup 🎵\n${shareUrl}`,
+          text: `My ${festivalName} lineup\n${shareUrl}`,
         })
       } else if (navigator.share) {
         await navigator.share({
           title: `My ${festivalName} schedule`,
-          text: `My ${festivalName} lineup 🎵`,
+          text: `My ${festivalName} lineup`,
           url: shareUrl,
         })
       } else {

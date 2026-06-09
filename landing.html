@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>earrands</title>
+  <meta name="description" content="Your festival schedule, offline. Pick your sets, see your clashes, share with your group." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Barlow+Condensed:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0A0A0A;
+      --fg: #FFFFFF;
+      --accent: #CCFF00;
+      --muted: #666666;
+      --border: #1A1A1A;
+      --mono: 'Space Mono', monospace;
+      --cond: 'Barlow Condensed', sans-serif;
+    }
+
+    html { font-size: 16px; background: var(--bg); color: var(--fg); }
+
+    body {
+      font-family: var(--cond);
+      font-weight: 400;
+      line-height: 1.6;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 48px 0 80px;
+    }
+
+    .wordmark {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      padding-bottom: 80px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .hero h1 {
+      font-family: var(--cond);
+      font-size: clamp(36px, 8vw, 56px);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      color: var(--fg);
+      margin-bottom: 24px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .hero p {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--fg);
+      max-width: 480px;
+      margin-bottom: 36px;
+      line-height: 1.5;
+    }
+
+    .cta-link {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--bg);
+      background: var(--accent);
+      padding: 14px 28px;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .cta-link:hover { opacity: 0.85; }
+
+    /* ── Problem ── */
+    .problem {
+      padding: 72px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .problem p {
+      font-size: 20px;
+      line-height: 1.6;
+      color: var(--fg);
+      font-weight: 400;
+    }
+
+    /* ── Features ── */
+    .features {
+      padding: 72px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .feature {
+      margin-bottom: 56px;
+    }
+    .feature:last-child { margin-bottom: 0; }
+
+    .feature-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .feature h2 {
+      font-family: var(--cond);
+      font-size: 28px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      color: var(--fg);
+      margin-bottom: 10px;
+    }
+
+    .feature p {
+      font-size: 17px;
+      color: var(--fg);
+      line-height: 1.55;
+      max-width: 520px;
+    }
+
+    /* ── Ground rules ── */
+    .rules {
+      padding: 64px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .rules ul {
+      list-style: none;
+    }
+
+    .rules li {
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .rules li:first-child { border-top: 1px solid var(--border); }
+
+    /* ── Close ── */
+    .close {
+      padding: 72px 0 96px;
+    }
+
+    .close p {
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      padding: 32px 0 48px;
+      border-top: 1px solid var(--border);
+    }
+
+    footer p {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* ── Mobile ── */
+    @media (max-width: 480px) {
+      body { padding: 0 20px; }
+      header { padding: 36px 0 64px; }
+      .hero { padding-bottom: 60px; }
+      .hero h1 { font-size: 36px; }
+      .problem, .features, .rules, .close { padding: 56px 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="wordmark">Earrands</span>
+  </header>
+
+  <section class="hero">
+    <h1>Your festival schedule,<br><em>offline.</em></h1>
+    <p>Pick your sets, see your clashes, share with your group. Built for how you actually move through a festival.</p>
+    <a href="/app" class="cta-link">Open earrands →</a>
+  </section>
+
+  <section class="problem">
+    <p>Every festival ends the same way. Screenshots of the timetable buried in your camera roll. A WhatsApp thread where someone keeps sending PDFs. Fifteen tabs open on the day, half of them dead links. Your phone at 12% trying to load a website with no signal.</p>
+  </section>
+
+  <section class="features">
+    <div class="feature">
+      <div class="feature-num">01</div>
+      <h2>Mark your sets</h2>
+      <p>Browse the full lineup and tap to mark the sets you're going to. Clashes surface automatically — you can see exactly where your day stacks up before you're standing at the wrong stage.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-num">02</div>
+      <h2>Works when the signal doesn't</h2>
+      <p>Everything you've marked is on your phone. Underground, outdoor, warehouse — no connection required once you've loaded your schedule.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-num">03</div>
+      <h2>Rate what you heard</h2>
+      <p>Quick thumbs after a set. Over a festival, over a year, it builds into a record of what you've actually seen.</p>
+    </div>
+  </section>
+
+  <section class="rules">
+    <ul>
+      <li>No social features</li>
+      <li>No algorithm</li>
+      <li>No account required to browse</li>
+      <li>Free</li>
+      <li>Works on any phone</li>
+    </ul>
+  </section>
+
+  <section class="close">
+    <p>Available now</p>
+    <a href="/app" class="cta-link">Open earrands →</a>
+  </section>
+
+  <footer>
+    <p>earrands.app</p>
+  </footer>
+
+</body>
+</html>

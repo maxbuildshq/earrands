@@ -18,7 +18,7 @@ export function OfflineNotice() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-conflict text-surface text-center py-2 px-4 font-mono text-xs uppercase tracking-wider">
-      Offline — actions will sync when you reconnect
+      You're offline. Everything still works.
     </div>
   )
 }

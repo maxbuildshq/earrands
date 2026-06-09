@@ -58,7 +58,7 @@ describe('buildEmailHtml', () => {
     expect(html).toContain('https://example.com/schedule')
     expect(html).toContain('timetable is live')
     expect(html).toContain('EARRANDS')
-    expect(html).toContain('un-follow')
+    expect(html).toContain('unfollow')
   })
 
   it('includes request-specific language for request type', () => {
@@ -80,7 +80,7 @@ describe('buildEmailText', () => {
     const text = buildEmailText('909 Festival', 'https://example.com', 'follow')
     expect(text).toContain('909 Festival')
     expect(text).toContain('https://example.com')
-    expect(text).toContain('un-follow')
+    expect(text).toContain('unfollow')
   })
 
   it('builds request variant', () => {
