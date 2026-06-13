@@ -2,9 +2,13 @@
 
 ## Product & Context
 
-Mobile-first PWA for electronic music festival attendees — phones at live festivals, outdoors in sunlight, dark warehouses, bad networks, limited battery. Three things: **Timetable**, **"Going to"** marks, **Ratings**. Not social (no friends, no GPS, no push notifications). Next step: iOS app.
+Mobile-first PWA (as MVP) for electronic music festival attendees — phones at live festivals, outdoors in sunlight, dark warehouses, bad networks, limited battery. Three things: **Timetable**, **"Going to"** marks, **Ratings**.
 
-**Competitor: Resident Advisor (RA).** Do not use RA as a data source, do not link to RA, do not recommend RA in any feature.
+Currently only “Festival mode” for laser focused launch - multi-stage festivals. With **competitors such as Woov, Appic, Headliners, Festiverse, Festival Dust** and others. Non-obvious competitors - screenshot from the festival’s timetable as picture or lock-screen wallpaper, festival’s instagram timetable post, screenshot in the whatsapp group between friends.
+
+There is a high chance there will be extension to smaller events (which are most likely a different business model) organized by smaller promoters, single-day/night, single stage is common. This will be a second ”Event mode”. Most known **competition - Resident Advisor RA Guide**. Do not use RA as a data source, do not link to RA, do not recommend RA in any feature.
+
+
 
 Every UI change must hold up against: bad network (PWA cache-first), bright sunlight (high contrast), offline browsing (service worker), auth required only for marks and ratings.
 
@@ -59,6 +63,16 @@ scripts/                     # ingest, notify, parse-artists (see scripts/CLAUDE
 supabase/
   migrations/                # sequential SQL files (see supabase/CLAUDE.md for schema)
 ```
+## Roadmap
+
+| Horizon | Features |
+|---|---|
+| **Now** | UX revamp · Landing page |
+| **Next** | Share schedule templates · Performance marketing · Marketing IG agent & artist outreach · Event/artist ingestion improvements · Friends & party mode |
+| **Later** | iOS app · Admin page · Multi-tier interest model · Map view & GPS | iOS Push notifications & Live Activities
+| **Maybe** | Post-event streaming playlists · Artist Pro mode & NFT |
+
+Full board: [Notion](https://app.notion.com/p/282a652251054a43bfe23d48ddea7574)
 
 ## Key Decisions
 
@@ -71,6 +85,8 @@ Full rationale in `docs/decisions/`. These cause bugs if forgotten:
 - Combo bio vs individual bio display — `resolveArtists()` in `SetSheet.tsx` ([005](docs/decisions/005-combo-bio.md))
 - Deploy: `npx wrangler deploy`, NOT `wrangler pages deploy` ([006](docs/decisions/006-wrangler-deploy.md))
 - Marketing consent checkbox: unchecked by default (GDPR) ([007](docs/decisions/007-marketing-consent.md))
+
+Forward-looking (not bug-prevention): iOS/Android migration app-size strategy — options open, principles to follow before the native build ([008](docs/decisions/008-ios-migration-app-size.md)).
 
 When you discover a new non-obvious constraint, add a bullet here and create `docs/decisions/NNN-title.md`. When a pattern in `scripts/` or `supabase/` changes, update the relevant subdirectory CLAUDE.md.
 
