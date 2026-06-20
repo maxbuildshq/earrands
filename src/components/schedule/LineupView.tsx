@@ -2,6 +2,7 @@ import type { Festival, FestivalSet } from '../../types/database'
 import { useAuth } from '../../hooks/useAuth'
 import { GoingToggle } from '../actions/GoingToggle'
 import { FollowButton } from '../festival/FollowButton'
+import { Badge } from '../ui/Badge'
 
 type Props = {
   festival: Festival
@@ -29,7 +30,7 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
           <span className="font-mono text-xs text-text-secondary uppercase tracking-wider">
             {daySets.length} artists
           </span>
-          <span className="font-mono text-xs text-acid/70 uppercase tracking-wider">
+          <span className="font-mono text-xs text-accent/70 uppercase tracking-wider">
             Timetable TBA
           </span>
         </div>
@@ -44,9 +45,7 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
                 {set.artist_name}
               </span>
               {set.is_live && (
-                <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-mono font-bold bg-live text-white uppercase leading-none">
-                  Live
-                </span>
+                <Badge variant="live" className="shrink-0 text-white">Live</Badge>
               )}
             </div>
 

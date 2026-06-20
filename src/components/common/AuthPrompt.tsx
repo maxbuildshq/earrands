@@ -19,14 +19,14 @@ export function AuthPrompt({ message }: Props) {
         <Link
           to="/signup"
           state={{ returnTo }}
-          className="w-full text-center bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors"
+          className="w-full text-center bg-accent text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-accent-dim transition-colors"
         >
           Create account
         </Link>
         <Link
           to="/login"
           state={{ returnTo }}
-          className="w-full text-center border border-border text-text-secondary font-mono py-2.5 text-sm uppercase tracking-wider hover:border-text-secondary hover:text-text-primary transition-colors"
+          className="w-full text-center border border-border text-text-secondary font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:border-text-secondary hover:text-text-primary transition-colors"
         >
           Log in
         </Link>

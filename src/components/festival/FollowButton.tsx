@@ -3,6 +3,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useFestivalFollows } from '../../hooks/useFestivalFollows'
 import { BottomSheet } from '../common/BottomSheet'
 import { AuthPrompt } from '../common/AuthPrompt'
+import { Button } from '../ui/Button'
 
 type Props = {
   festivalId: string
@@ -33,30 +34,25 @@ export function FollowButton({ festivalId, variant = 'icon' }: Props) {
   return (
     <>
       {variant === 'banner' ? (
-        <button
+        <Button
+          variant="accent-toggle"
+          active={following}
           onClick={handleClick}
-          className={`w-full flex items-center justify-center gap-2 py-2.5 px-3 font-mono font-bold text-sm uppercase tracking-wider transition-colors ${
-            following
-              ? 'bg-acid text-surface'
-              : 'border border-acid text-acid hover:bg-acid hover:text-surface'
-          }`}
+          className="flex items-center justify-center gap-2"
         >
           <BellIcon filled={following} />
           {following ? "You'll be notified" : 'Notify me when the timetable drops'}
-        </button>
+        </Button>
       ) : (
-        <button
+        <Button
+          variant="icon-toggle"
+          active={following}
           onClick={handleClick}
           title={following ? "You'll be notified when the timetable drops" : 'Notify me when the timetable drops'}
           aria-label="Notify me when the timetable drops"
-          className={`w-8 h-8 flex items-center justify-center border transition-colors ${
-            following
-              ? 'bg-acid text-surface border-acid'
-              : 'bg-surface text-text-secondary border-border hover:border-text-secondary'
-          }`}
         >
           <BellIcon filled={following} />
-        </button>
+        </Button>
       )}
 
       {promptOpen && (

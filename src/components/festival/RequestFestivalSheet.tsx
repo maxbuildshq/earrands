@@ -3,6 +3,9 @@ import { useAuth } from '../../hooks/useAuth'
 import { useFestivalRequests } from '../../hooks/useFestivalRequests'
 import { BottomSheet } from '../common/BottomSheet'
 import { AuthPrompt } from '../common/AuthPrompt'
+import { Button } from '../ui/Button'
+import { Input } from '../ui/Input'
+import { Label } from '../ui/Label'
 
 type Props = {
   onClose: () => void
@@ -31,12 +34,7 @@ export function RequestFestivalSheet({ onClose }: Props) {
           <p className="text-text-primary text-sm leading-relaxed">
             Thanks — we've logged your request. If we add it, we'll email you.
           </p>
-          <button
-            onClick={onClose}
-            className="mt-5 w-full bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors"
-          >
-            Done
-          </button>
+          <Button onClick={onClose} variant="primary" className="mt-5">Done</Button>
         </div>
       </BottomSheet>
     )
@@ -61,38 +59,34 @@ export function RequestFestivalSheet({ onClose }: Props) {
     <BottomSheet title="REQUEST A FESTIVAL" onClose={onClose}>
       <form onSubmit={handleSubmit} className="px-4 pb-8 pt-1 space-y-4">
         <div>
-          <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Festival name</label>
-          <input
+          <Label htmlFor="festival-name">Festival name</Label>
+          <Input
+            id="festival-name"
             value={name}
             onChange={e => setName(e.target.value)}
             autoFocus
             placeholder="e.g. Time Warp"
-            className="w-full bg-surface border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
           />
         </div>
 
         <div>
-          <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">
+          <Label htmlFor="festival-region">
             Where are you based? <span className="normal-case text-text-secondary/60">(optional)</span>
-          </label>
-          <input
+          </Label>
+          <Input
+            id="festival-region"
             value={region}
             onChange={e => setRegion(e.target.value)}
             placeholder="e.g. Amsterdam"
-            className="w-full bg-surface border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
           />
           <p className="text-text-secondary/70 text-xs mt-1">Help us prioritize events near you.</p>
         </div>
 
-        {error && <div className="text-live text-sm font-mono">{error}</div>}
+        {error && <div className="text-negative text-sm font-mono">{error}</div>}
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors disabled:opacity-50"
-        >
+        <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? 'SENDING...' : 'SEND REQUEST'}
-        </button>
+        </Button>
       </form>
     </BottomSheet>
   )

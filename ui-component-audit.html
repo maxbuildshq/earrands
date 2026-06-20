@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>earrands — UI component audit</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;700&display=swap');
+
+  :root {
+    --color-bg: #0A0A0A;
+    --color-surface: #0A0A0A;
+    --color-surface-raised: #141414;
+    --color-border: #2a2a2a;
+    --color-accent: #CCFF00;
+    --color-accent-dim: #a3cc00;
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #FFFFFF;
+    --color-text-dim: #8a8a8a;
+    --color-negative: #FF3B30;
+    --color-live: #FF3B30;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: #050505;
+    color: #fff;
+    font-family: 'Chakra Petch', ui-monospace, monospace;
+    margin: 0;
+    padding: 32px 24px 120px;
+  }
+
+  .wrap { max-width: 1400px; margin: 0 auto; }
+
+  h1.doc-title {
+    color: var(--color-accent);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .doc-sub { color: var(--color-text-dim); font-size: 13px; margin: 0 0 36px; }
+
+  .toc {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 40px; padding: 14px 16px;
+    background: var(--color-surface-raised); border: 1px solid var(--color-border);
+  }
+  .toc a {
+    color: var(--color-text-dim); text-decoration: none; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+    padding: 6px 10px; border: 1px solid var(--color-border); transition: all .15s;
+  }
+  .toc a:hover { color: var(--color-accent); border-color: var(--color-accent); }
+
+  section.component { margin-bottom: 56px; }
+
+  h2.comp-title {
+    color: var(--color-accent); font-size: 16px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 0 0 4px; padding-bottom: 10px; border-bottom: 2px solid var(--color-border);
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .comp-title .count {
+    color: var(--color-text-dim); font-size: 11px; font-weight: 400; text-transform: none;
+    letter-spacing: normal;
+  }
+  .comp-note { color: var(--color-text-dim); font-size: 12px; margin: 8px 0 16px; line-height: 1.5; max-width: 900px; }
+  .comp-note code { color: var(--color-accent); background: var(--color-surface-raised); padding: 1px 4px; font-size: 11px; }
+
+  table.audit { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+  table.audit col.c-variant { width: 13%; }
+  table.audit col.c-preview { width: 19%; }
+  table.audit col.c-values  { width: 32%; }
+  table.audit col.c-uses    { width: 36%; }
+
+  table.audit th {
+    text-align: left; color: var(--color-text-dim); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+    padding: 8px 10px; border-bottom: 1px solid var(--color-border);
+    position: sticky; top: 0; background: #050505;
+  }
+  table.audit td {
+    padding: 12px 10px; border-bottom: 1px solid #1a1a1a; vertical-align: top;
+  }
+  table.audit tr:hover td { background: #0e0e0e; }
+
+  .variant-name { font-weight: 700; color: #fff; }
+  .variant-sub { display: block; color: var(--color-text-dim); font-size: 10.5px; margin-top: 2px; font-weight: 400; }
+
+  .preview-box { display: flex; align-items: center; justify-content: flex-start; min-height: 36px; }
+
+  .vlist { margin: 0; padding: 0; list-style: none; }
+  .vlist li { margin-bottom: 6px; padding-left: 10px; border-left: 2px solid var(--color-border); font-size: 11.5px; color: #ddd; line-height: 1.45; }
+  .vlist li b { color: #fff; }
+  .vlist li .loc { display: block; color: var(--color-text-dim); font-size: 10px; margin-top: 1px; }
+
+  /* --- real component styles, copied from src/components/ui --- */
+  .btn { font-family: inherit; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 16px; transition: color .15s, background .15s, border-color .15s; cursor: pointer; border: none; }
+  .btn-primary { background: var(--color-accent); color: var(--color-bg); }
+  .btn-primary:hover { background: var(--color-accent-dim); }
+  .btn-secondary { background: transparent; color: #fff; border: 1px solid var(--color-border); }
+  .btn-secondary:hover { border-color: #fff; }
+  .btn-accent-outline { background: transparent; color: var(--color-accent); border: 1px solid var(--color-accent); }
+  .btn-accent-outline:hover { background: var(--color-accent); color: var(--color-bg); }
+  .btn-accent-toggle { background: transparent; color: var(--color-accent); border: 1px solid var(--color-accent); }
+  .btn-accent-toggle:hover { background: var(--color-accent); color: var(--color-bg); }
+  .btn-accent-toggle.active { background: var(--color-accent); color: var(--color-bg); }
+  .btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); color: var(--color-text-dim); background: transparent; padding: 0; }
+  .btn-icon:hover { color: #fff; border-color: #fff; }
+  .btn-icon-toggle { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-dim); padding: 0; }
+  .btn-icon-toggle:hover { border-color: #fff; }
+  .btn-icon-toggle.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+  .btn-danger { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-dim); padding: 0; }
+  .btn-danger:hover { border-color: #fff; }
+  .btn-danger.active { background: var(--color-negative); border-color: var(--color-negative); color: #fff; }
+  .btn-segment { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: transparent; color: var(--color-text-dim); border: none; padding: 8px 14px; }
+  .btn-segment:hover { color: #fff; }
+  .btn-segment.active { background: var(--color-accent); color: var(--color-bg); }
+  .btn-choice { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; background: transparent; color: var(--color-text-dim); border: 1px solid var(--color-border); padding: 8px 14px; }
+  .btn-choice:hover { border-color: #fff; color: #fff; }
+  .btn-choice.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg); }
+
+  .badge { display: inline-flex; align-items: center; padding: 3px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; line-height: 1; font-family: inherit; }
+  .badge-live { background: var(--color-live); color: #fff; }
+  .badge-accent { background: var(--color-accent); color: var(--color-bg); }
+  .badge-accent-outline { border: 1px solid var(--color-accent); color: var(--color-accent); }
+  .badge-outline { border: 1px solid var(--color-border); color: #fff; }
+
+  .heading { font-weight: 700; margin: 0; font-family: inherit; }
+  .heading-page { font-size: 24px; color: var(--color-accent); letter-spacing: -0.01em; }
+  .heading-content { font-size: 18px; color: var(--color-accent); letter-spacing: -0.01em; }
+  .heading-section { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #fff; }
+  .heading-sheet { font-size: 18px; color: #fff; }
+
+  .input { width: 100%; max-width: 180px; background: var(--color-bg); border: 1px solid var(--color-border); color: #fff; padding: 10px 12px; font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s; }
+  .input:hover { border-color: #555; }
+  .input:focus { border-color: var(--color-accent); }
+  .input::placeholder { color: var(--color-text-dim); }
+
+  .label { display: block; font-size: 13px; color: var(--color-text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; font-family: inherit; }
+
+  .raw-flag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #FF3B30; border: 1px solid #FF3B30; padding: 1px 5px; margin-bottom: 6px; }
+  .ok-flag { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-accent); border: 1px solid var(--color-accent); padding: 1px 5px; margin-bottom: 6px; }
+
+  /* logo / festival title demo */
+  .wordmark { font-weight: 700; font-size: 16px; color: var(--color-accent); letter-spacing: -0.01em; cursor: pointer; }
+
+  footer.note { color: var(--color-text-dim); font-size: 11px; margin-top: 60px; border-top: 1px solid var(--color-border); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="doc-title">earrands — UI component variant audit</h1>
+  <p class="doc-sub">Live, hoverable previews of every Button / Badge / Heading / Input / Label variant defined in <code>src/components/ui/</code>, every real value each one renders with in the app, every concrete call site, and every UI element still hand-rolled outside the system. Generated 2026-06-16.</p>
+
+  <div class="toc">
+    <a href="#logo">Logo / festival title</a>
+    <a href="#button">Button</a>
+    <a href="#badge">Badge</a>
+    <a href="#heading">Heading</a>
+    <a href="#input">Input</a>
+    <a href="#label">Label</a>
+    <a href="#unused">Unused variants</a>
+    <a href="#unmigrated">Not migrated</a>
+  </div>
+
+  <section class="component" id="logo">
+    <h2 class="comp-title">Logo / festival title <span class="count">— not a centralized component</span></h2>
+    <p class="comp-note">
+      Both the app wordmark and the festival-page title are the <b>same raw <code>&lt;Link&gt;</code></b> in
+      <code>src/components/layout/Header.tsx:60-66</code> — one element whose text and target swap depending on route,
+      styled inline with <code>font-mono font-bold text-accent text-base tracking-tight truncate</code>.
+      It is <b>not</b> built on <code>Heading</code> (closest visual match: <code>content</code> variant), and there is no
+      dedicated <code>Logo</code> or <code>FestivalTitle</code> component.
+    </p>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Element</th><th>Preview</th><th>Real values rendered</th><th>Call site</th></tr>
+      <tr>
+        <td><span class="variant-name">Wordmark / title link</span><span class="variant-sub">raw &lt;Link&gt; — hover changes color to accent-dim</span></td>
+        <td><div class="preview-box"><a class="wordmark" style="color:var(--color-accent)">EARRANDS</a></div></td>
+        <td>
+          <ul class="vlist">
+            <li><b>"EARRANDS"</b> — shown on every non-festival route (home, login, signup)<span class="loc">Header.tsx:64, falsy branch</span></li>
+            <li><b>{festival.name}</b> — swapped in on any <code>/festivals/:slug/schedule</code> route, e.g. <b>"Dekmantel"</b>, <b>"Awakenings"</b><span class="loc">Header.tsx:64, truthy branch — also doubles as "back to festivals" link</span></li>
+          </ul>
+        </td>
+        <td>
+          <ul class="vlist">
+            <li>Header.tsx:60 — wraps both states in one <code>&lt;Link to="/"&gt;</code>, <code>aria-label="Back to festivals"</code> only set when on a festival</li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="component" id="button">
+    <h2 class="comp-title">Button <span class="count">9 variants — all in use</span></h2>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Variant</th><th>Preview (hover/active it)</th><th>Real values in the app</th><th>Every call site</th></tr>
+
+      <tr>
+        <td><span class="variant-name">primary</span><span class="variant-sub">full-width CTA, solid accent</span></td>
+        <td><div class="preview-box"><button class="btn btn-primary">Sign in</button></div></td>
+        <td><ul class="vlist">
+          <li>"SIGN IN" / "SIGNING IN..." (loading)</li>
+          <li>"CREATE ACCOUNT" / "CREATING ACCOUNT..."</li>
+          <li>"SEND REQUEST" / "SENDING..."</li>
+          <li>"Done"</li>
+          <li>"Send feedback"</li>
+          <li>"Share" (in ShareScheduleSheet, alongside secondary "Download")</li>
+        </ul></td>
+        <td><ul class="vlist">
+          <li>LoginPage.tsx — submit button<span class="loc">disabled while loading</span></li>
+          <li>SignUpPage.tsx — submit button</li>
+          <li>RequestFestivalSheet.tsx — "SEND REQUEST" and post-submit "Done"</li>
+          <li>FeedbackButton.tsx — "Send feedback"</li>
+          <li>ShareScheduleSheet.tsx — "Share" (handleShare)</li>
+        </ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">secondary</span><span class="variant-sub">full-width, bordered neutral</span></td>
+        <td><div class="preview-box"><button class="btn btn-secondary">Download</button></div></td>
+        <td><ul class="vlist"><li>"Download"</li></ul></td>
+        <td><ul class="vlist"><li>ShareScheduleSheet.tsx — handleDownload, sits next to the primary "Share" button</li></ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">accent-outline</span><span class="variant-sub">full-width or compact, lime border</span></td>
+        <td><div class="preview-box"><button class="btn btn-accent-outline" style="padding:10px">↑ share</button></div></td>
+        <td><ul class="vlist">
+          <li>Share icon button (SVG only, no text) — appears when "Picks (n)" &gt; 0</li>
+          <li>Used full-width inside sheets too (RequestFestivalCTA's sheet, etc. via other flows)</li>
+        </ul></td>
+        <td><ul class="vlist">
+          <li>SchedulePage.tsx:202-216 — share icon next to "Picks (n)" segment, opens ShareScheduleSheet</li>
+          <li>ShareScheduleSheet.tsx / RequestFestivalSheet.tsx — full-width contexts</li>
+        </ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">accent-toggle</span><span class="variant-sub">full-width, solid when active</span></td>
+        <td><div class="preview-box"><button class="btn btn-accent-toggle active">All picks</button></div></td>
+        <td><ul class="vlist"><li>Toggles "all picks" view state (single boolean)</li></ul></td>
+        <td><ul class="vlist"><li>SchedulePage.tsx — one call, picks-all toggle context</li></ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">icon</span><span class="variant-sub">32×32 square, neutral border</span></td>
+        <td><div class="preview-box"><button class="btn btn-icon" title="Stages">▦</button></div></td>
+        <td><ul class="vlist"><li>"Stages" button showing "{visibleStages.length}/{stages.length}" e.g. <b>"4/7"</b> — stretched wide with text, not square, via className override</li></ul></td>
+        <td><ul class="vlist"><li>SchedulePage.tsx:222-238 — opens StagesSheet, only rendered when <code>layoutMode === 'list'</code></li></ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">icon-toggle</span><span class="variant-sub">32×32, solid accent when active</span></td>
+        <td><div class="preview-box"><button class="btn btn-icon-toggle active" title="Going">✓</button></div></td>
+        <td><ul class="vlist">
+          <li>Going checkmark — active = "Remove from my sets", inactive = "Add to my sets"</li>
+          <li>"Worth it" rating thumb — active when <code>rating === 1</code></li>
+          <li>Now-line / live timetable cell active states (TimetableGrid)</li>
+        </ul></td>
+        <td><ul class="vlist">
+          <li>SetActions.tsx:33 — going toggle (reused by SetCard + SetSheet)</li>
+          <li>SetActions.tsx:42 — "Worth it" rating</li>
+          <li>TimetableGrid.tsx — 2 further calls for grid-cell going state</li>
+        </ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">danger</span><span class="variant-sub">32×32, solid negative-red when active</span></td>
+        <td><div class="preview-box"><button class="btn btn-danger active" title="Not for me">✕</button></div></td>
+        <td><ul class="vlist"><li>"Not for me" rating thumbs-down — active when <code>rating === -1</code></li></ul></td>
+        <td><ul class="vlist"><li>SetActions.tsx:50 — only negative-rating button in the app</li></ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">segment</span><span class="variant-sub">borderless, shared-border group</span></td>
+        <td><div class="preview-box"><button class="btn btn-segment active" style="border-right:1px solid var(--color-border)">Fri</button><button class="btn btn-segment">Sat</button></div></td>
+        <td><ul class="vlist">
+          <li>Day chips, e.g. <b>"Fri"</b>, <b>"Sat"</b>, <b>"Sun"</b> (output of <code>formatDayChip()</code>, scrollable for 7+ day festivals)</li>
+          <li>"All" / "Picks (n)" e.g. <b>"Picks (12)"</b></li>
+          <li>"Timetable" / "List" layout-mode icons (no text, SVG only)</li>
+          <li>"Stages" corner cell inside the timetable grid header, e.g. <b>"4/7"</b></li>
+        </ul></td>
+        <td><ul class="vlist">
+          <li>DayToggle.tsx:24 — one per festival day</li>
+          <li>SchedulePage.tsx:198 — "All"</li>
+          <li>SchedulePage.tsx:201 — "Picks ({picksCount})"</li>
+          <li>SchedulePage.tsx:245 — timetable/list mode×2</li>
+          <li>TimetableGrid.tsx:179 — "Stages" corner button</li>
+        </ul></td>
+      </tr>
+
+      <tr>
+        <td><span class="variant-name">choice</span><span class="variant-sub">bordered standalone item</span></td>
+        <td><div class="preview-box"><button class="btn btn-choice active">Fine</button></div></td>
+        <td><ul class="vlist">
+          <li>Feedback sentiment: <b>"Love it"</b>, <b>"Fine"</b>, <b>"Frustrating"</b></li>
+          <li>Share-image template: <b>"Acid"</b>, <b>"Inverse"</b>, <b>"Mono"</b></li>
+        </ul></td>
+        <td><ul class="vlist">
+          <li>FeedbackButton.tsx:70 — <code>SENTIMENTS = ['Love it', 'Fine', 'Frustrating']</code></li>
+          <li>ShareScheduleSheet.tsx:105 — <code>TEMPLATES</code> from shareImage.ts (acid / inverse / mono)</li>
+        </ul></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="component" id="badge">
+    <h2 class="comp-title">Badge <span class="count">4 variants — all in use</span></h2>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Variant</th><th>Preview</th><th>Real values</th><th>Every call site</th></tr>
+      <tr>
+        <td><span class="variant-name">live</span><span class="variant-sub">solid red</span></td>
+        <td><div class="preview-box"><span class="badge badge-live">Live</span></div></td>
+        <td><ul class="vlist"><li>"Live" — always this exact string</li></ul></td>
+        <td><ul class="vlist"><li>SetCard.tsx:78, SetSheet.tsx:219, LineupView.tsx:48 — shown when a set's time window contains "now"</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">accent</span><span class="variant-sub">solid lime</span></td>
+        <td><div class="preview-box"><span class="badge badge-accent">Timetable</span></div></td>
+        <td><ul class="vlist">
+          <li>"Timetable" — festival list, festival has <code>timetable_announced: true</code></li>
+          <li>now-line marker dot in TimetableGrid (no text, positional)</li>
+        </ul></td>
+        <td><ul class="vlist"><li>FestivalListPage.tsx:96, TimetableGrid.tsx:231</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">accent-outline</span><span class="variant-sub">lime border only</span></td>
+        <td><div class="preview-box"><span class="badge badge-accent-outline">Lineup</span></div></td>
+        <td><ul class="vlist"><li>"Lineup" — festival has <code>timetable_announced: false</code></li></ul></td>
+        <td><ul class="vlist"><li>FestivalListPage.tsx:98</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">outline</span><span class="variant-sub">neutral border</span></td>
+        <td><div class="preview-box"><span class="badge badge-outline">Past</span></div></td>
+        <td><ul class="vlist"><li>"Past" — festival end_date is before today</li></ul></td>
+        <td><ul class="vlist"><li>FestivalListPage.tsx:94</li></ul></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="component" id="heading">
+    <h2 class="comp-title">Heading <span class="count">4 variants — all in use</span></h2>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Variant</th><th>Preview</th><th>Real values</th><th>Every call site</th></tr>
+      <tr>
+        <td><span class="variant-name">page</span><span class="variant-sub">h1, 24px, accent</span></td>
+        <td><div class="preview-box"><h1 class="heading heading-page">Login</h1></div></td>
+        <td><ul class="vlist"><li>"LOGIN"</li><li>"SIGN UP"</li><li>"CHECK YOUR EMAIL" (post-signup success state)</li></ul></td>
+        <td><ul class="vlist"><li>LoginPage.tsx:41</li><li>SignUpPage.tsx:46 (success), :60 (form)</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">content</span><span class="variant-sub">h1, 18px, accent</span></td>
+        <td><div class="preview-box"><h1 class="heading heading-content">Shared schedule</h1></div></td>
+        <td><ul class="vlist"><li>"SHARED SCHEDULE"</li></ul></td>
+        <td><ul class="vlist"><li>SharedSchedulePage.tsx:79</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">section</span><span class="variant-sub">h2, 12px uppercase</span></td>
+        <td><div class="preview-box"><h2 class="heading heading-section">Upcoming</h2></div></td>
+        <td><ul class="vlist"><li>"Upcoming" (accent color override)</li><li>"Past" (text-secondary color override)</li></ul></td>
+        <td><ul class="vlist"><li>FestivalListPage.tsx:45, :56 — section dividers in the festival list</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">sheet</span><span class="variant-sub">h2, 18px, primary white</span></td>
+        <td><div class="preview-box"><h2 class="heading heading-sheet">Request a festival</h2></div></td>
+        <td><ul class="vlist">
+          <li>"REQUEST A FESTIVAL" / "REQUEST SENT"</li>
+          <li>"SHARE MY SCHEDULE"</li>
+          <li>"SIGN UP TO SAVE"</li>
+          <li>any other <code>title</code> prop passed to <code>BottomSheet</code></li>
+        </ul></td>
+        <td><ul class="vlist"><li>BottomSheet.tsx:91 — renders whatever <code>title</code> the calling sheet passes in</li></ul></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="component" id="input">
+    <h2 class="comp-title">Input <span class="count">no variants — 5 real fields across 3 pages</span></h2>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Field</th><th>Preview</th><th>Real type / placeholder / value</th><th>Call site</th></tr>
+      <tr>
+        <td><span class="variant-name">email</span></td>
+        <td><div class="preview-box"><input class="input" type="email" placeholder=""></div></td>
+        <td><ul class="vlist"><li><code>type="email"</code>, no placeholder, <code>required</code></li></ul></td>
+        <td><ul class="vlist"><li>LoginPage.tsx — id="email"</li><li>SignUpPage.tsx — id="email"</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">password</span></td>
+        <td><div class="preview-box"><input class="input" type="password" placeholder=""></div></td>
+        <td><ul class="vlist"><li><code>type="password"</code>, <code>required minLength={6}</code></li></ul></td>
+        <td><ul class="vlist"><li>LoginPage.tsx — id="password"</li><li>SignUpPage.tsx — id="password"</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">confirm password</span></td>
+        <td><div class="preview-box"><input class="input" type="password" placeholder=""></div></td>
+        <td><ul class="vlist"><li><code>type="password"</code>, <code>required minLength={6}</code></li></ul></td>
+        <td><ul class="vlist"><li>SignUpPage.tsx — id="confirm"</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">festival name</span></td>
+        <td><div class="preview-box"><input class="input" type="text" placeholder="e.g. Time Warp"></div></td>
+        <td><ul class="vlist"><li>placeholder <b>"e.g. Time Warp"</b>, <code>autoFocus</code></li></ul></td>
+        <td><ul class="vlist"><li>RequestFestivalSheet.tsx — id="festival-name"</li></ul></td>
+      </tr>
+      <tr>
+        <td><span class="variant-name">region (optional)</span></td>
+        <td><div class="preview-box"><input class="input" type="text" placeholder="e.g. Amsterdam"></div></td>
+        <td><ul class="vlist"><li>placeholder <b>"e.g. Amsterdam"</b></li></ul></td>
+        <td><ul class="vlist"><li>RequestFestivalSheet.tsx — id="festival-region"</li></ul></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="component" id="label">
+    <h2 class="comp-title">Label <span class="count">no variants — 5 real captions across 3 pages</span></h2>
+    <table class="audit">
+      <colgroup><col class="c-variant"><col class="c-preview"><col class="c-values"><col class="c-uses"></colgroup>
+      <tr><th>Field</th><th>Preview</th><th>Real text</th><th>Call site</th></tr>
+      <tr><td>email</td><td><div class="preview-box"><label class="label">Email</label></div></td><td><ul class="vlist"><li>"Email"</li></ul></td><td><ul class="vlist"><li>LoginPage.tsx, SignUpPage.tsx</li></ul></td></tr>
+      <tr><td>password</td><td><div class="preview-box"><label class="label">Password</label></div></td><td><ul class="vlist"><li>"Password"</li></ul></td><td><ul class="vlist"><li>LoginPage.tsx, SignUpPage.tsx</li></ul></td></tr>
+      <tr><td>confirm</td><td><div class="preview-box"><label class="label">Confirm password</label></div></td><td><ul class="vlist"><li>"Confirm password"</li></ul></td><td><ul class="vlist"><li>SignUpPage.tsx</li></ul></td></tr>
+      <tr><td>festival name</td><td><div class="preview-box"><label class="label">Festival name</label></div></td><td><ul class="vlist"><li>"Festival name"</li></ul></td><td><ul class="vlist"><li>RequestFestivalSheet.tsx</li></ul></td></tr>
+      <tr><td>region</td><td><div class="preview-box"><label class="label">Where are you based?</label></div></td><td><ul class="vlist"><li>"Where are you based? <span style='text-transform:none'>(optional)</span>" — trailing span is lowercase + dimmer via <code>normal-case text-text-secondary/60</code></li></ul></td><td><ul class="vlist"><li>RequestFestivalSheet.tsx</li></ul></td></tr>
+    </table>
+  </section>
+
+  <section class="component" id="unused">
+    <h2 class="comp-title">Unused variants</h2>
+    <p class="comp-note">None. Every variant defined in <code>Button</code>, <code>Badge</code>, and <code>Heading</code> has at least one real call site in the codebase — no dead variance to prune.</p>
+  </section>
+
+  <section class="component" id="unmigrated">
+    <h2 class="comp-title">Not migrated to centralized primitives</h2>
+    <table class="audit">
+      <colgroup style="width:18%"><col style="width:19%"><col style="width:32%"><col style="width:31%"></colgroup>
+      <tr><th>Raw element</th><th>Preview</th><th>Real instance(s) + content</th><th>Verdict</th></tr>
+
+      <tr>
+        <td><span class="raw-flag">migrate</span><br><span class="variant-name">GoingToggle</span><span class="variant-sub">raw &lt;button&gt;, 32×32</span></td>
+        <td><div class="preview-box"><button class="btn btn-icon-toggle active">✓</button></div></td>
+        <td><ul class="vlist"><li>Going toggle, title <b>"Remove from my sets"</b> / <b>"Add to my sets"</b><span class="loc">GoingToggle.tsx:8 — full file is a hand-coded duplicate of Button's icon-toggle</span></li></ul></td>
+        <td>Structurally identical to <code>Button variant="icon-toggle"</code>. Strong migration candidate — likely a leftover from before the primitive existed.</td>
+      </tr>
+
+      <tr>
+        <td><span class="raw-flag">migrate</span><br><span class="variant-name">StagesSheet pin</span><span class="variant-sub">raw &lt;button&gt;, 32×32 icon toggle</span></td>
+        <td><div class="preview-box"><button class="btn btn-icon-toggle active" title="Unpin">📌</button></div></td>
+        <td><ul class="vlist"><li>Pin/unpin a stage row, title <b>"Pin to top"</b> / <b>"Unpin"</b>, <code>aria-pressed</code><span class="loc">StagesSheet.tsx:77</span></li></ul></td>
+        <td>Same shape as <code>icon-toggle</code> but with a custom active color (accent text, no fill) — would need a slight variant tweak, not a 1:1 swap.</td>
+      </tr>
+
+      <tr>
+        <td><span class="raw-flag">migrate</span><br><span class="variant-name">TimetableSetBlock going</span><span class="variant-sub">raw &lt;button&gt; on grid cell</span></td>
+        <td><div class="preview-box"><button class="btn btn-icon-toggle active" style="width:20px;height:20px;border-radius:3px" title="Going">✓</button></div></td>
+        <td><ul class="vlist"><li>Going checkmark inside a timetable grid block, hardcodes <code>ACID = '#CCFF00'</code> hex literal instead of the CSS variable<span class="loc">TimetableSetBlock.tsx:101</span></li></ul></td>
+        <td>Duplicates <code>--color-accent</code> as a literal — worth migrating both for consistency with the design token and to reuse <code>icon-toggle</code>.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span><br><span class="variant-name">SetSheet image triggers</span><span class="variant-sub">raw &lt;button&gt;, bare tap targets</span></td>
+        <td><div class="preview-box"><button style="border:none;background:none;padding:0;width:40px;height:40px;background:#222;display:flex;align-items:center;justify-content:center;color:#666">img</button></div></td>
+        <td><ul class="vlist"><li>Hero image lightbox open, artist avatar stack (e.g. 2-3 overlapping circular images) opens lightbox per artist<span class="loc">SetSheet.tsx:187, :194</span></li></ul></td>
+        <td>No button chrome at all — wraps an <code>&lt;img&gt;</code>. Not a Button-shaped use case.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span> / minor gap<br><span class="variant-name">FeedbackButton trigger</span><span class="variant-sub">raw &lt;button&gt;, borderless icon</span></td>
+        <td><div class="preview-box"><button style="width:32px;height:32px;border:none;background:none;color:var(--color-text-dim);display:flex;align-items:center;justify-content:center" title="Send feedback">💬</button></div></td>
+        <td><ul class="vlist"><li>Header feedback icon, <code>aria-label="Send feedback"</code><span class="loc">FeedbackButton.tsx:104</span></li></ul></td>
+        <td>Same borderless-icon pattern as the logout/login icon below. No existing variant covers "no border, no active state" — a 10th Button variant only if this pattern recurs again.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span> / minor gap<br><span class="variant-name">Header AuthIcon</span><span class="variant-sub">raw &lt;button&gt; / &lt;Link&gt;, borderless icon</span></td>
+        <td><div class="preview-box"><button style="width:32px;height:32px;border:none;background:none;color:var(--color-text-dim);display:flex;align-items:center;justify-content:center" title="Log out">⎋</button></div></td>
+        <td><ul class="vlist"><li>"Log out" icon when signed in, "Log in" link to <code>/login</code> when signed out<span class="loc">Header.tsx:13-44</span></li></ul></td>
+        <td>Identical borderless pattern to FeedbackButton's trigger — these two together make the case for a borderless <code>icon</code> sub-style.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span><br><span class="variant-name">RequestFestivalCTA</span><span class="variant-sub">raw &lt;button&gt;, full-row layout</span></td>
+        <td><div class="preview-box"><button style="width:100%;display:flex;justify-content:space-between;border:1px solid var(--color-border);background:#141414;padding:10px 14px;color:#fff;font-size:12px"><span style="color:var(--color-text-dim)">Don't see your festival?</span><span style="color:var(--color-accent);font-weight:700">Request it →</span></button></div></td>
+        <td><ul class="vlist"><li>"Don't see your festival?" ⟷ "Request it →", two-part label inside one button<span class="loc">RequestFestivalCTA.tsx:9</span></li></ul></td>
+        <td>Bespoke split-label layout, not a Button shape. Fine as a one-off.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span><br><span class="variant-name">Atmosphere range slider</span><span class="variant-sub">raw &lt;input type="range"&gt;</span></td>
+        <td><div class="preview-box"><input type="range" min="0" max="100" value="40" style="width:140px"></div></td>
+        <td><ul class="vlist"><li>Dev-only debug panel fields: e.g. fog amount, particle density, glow intensity (slider values like <b>40</b>)<span class="loc">Atmosphere.tsx:101-112</span></li></ul></td>
+        <td>Debug-only tool, out of scope for the production design system.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span> / new primitive needed<br><span class="variant-name">Marketing consent checkbox</span><span class="variant-sub">raw &lt;input type="checkbox"&gt;</span></td>
+        <td><div class="preview-box"><input type="checkbox" checked style="accent-color:var(--color-accent);width:16px;height:16px"></div></td>
+        <td><ul class="vlist"><li>"Email me occasional updates worth reading — new festivals and major features. No spam, unsubscribe anytime." — unchecked by default (GDPR)<span class="loc">SignUpPage.tsx:78-87</span></li></ul></td>
+        <td>Only checkbox in the app. No <code>Checkbox</code> primitive exists — first real candidate if one is ever built.</td>
+      </tr>
+
+      <tr>
+        <td><span class="raw-flag">migrate</span><br><span class="variant-name">FeedbackButton sentiment label</span><span class="variant-sub">raw &lt;label&gt;, duplicates Label styles</span></td>
+        <td><div class="preview-box"><label class="label">How's it going?</label></div></td>
+        <td><ul class="vlist"><li>"How's it going?" — re-types <code>block text-text-secondary text-sm mb-2 uppercase tracking-wider</code> instead of importing <code>Label</code><span class="loc">FeedbackButton.tsx:64</span></li></ul></td>
+        <td>Trivial fix — should just render <code>&lt;Label&gt;</code>.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span><br><span class="variant-name">Atmosphere field rows / consent wrapper</span><span class="variant-sub">raw &lt;label&gt; wrapping non-field content</span></td>
+        <td><div class="preview-box"><label style="display:flex;gap:8px;align-items:flex-start;font-size:11px;color:#ccc"><input type="checkbox" style="margin-top:3px"><span>Email me occasional updates...</span></label></div></td>
+        <td><ul class="vlist"><li>Atmosphere.tsx:101 — wraps a slider row + live value readout</li><li>SignUpPage.tsx:78 — wraps checkbox + consent copy</li></ul></td>
+        <td><code>Label</code> is for field captions only; these wrap composite rows, not a single field. Correctly excluded per ADR 010.</td>
+      </tr>
+
+      <tr>
+        <td><span class="ok-flag">leave</span><br><span class="variant-name">Card / sheet title headings</span><span class="variant-sub">raw &lt;h2&gt;/&lt;h3&gt;</span></td>
+        <td><div class="preview-box"><h3 style="font-weight:700;font-family:inherit;font-size:15px;color:#fff;margin:0">Charlotte de Witte</h3></div></td>
+        <td><ul class="vlist">
+          <li>SetCard.tsx:60 — artist name, color flips to accent when <code>isNow</code></li>
+          <li>SetSheet.tsx:203 — artist name in the sheet header</li>
+          <li>FestivalListPage.tsx:81 — festival name in each list card, e.g. <b>"Dekmantel"</b></li>
+        </ul></td>
+        <td>None of <code>page/content/section/sheet</code> fit a card title's size/weight — likely an intentional gap in <code>Heading</code>'s scope rather than an oversight.</td>
+      </tr>
+    </table>
+  </section>
+
+  <footer class="note">
+    Self-contained file — open directly in any browser, no build step. Hover/active states on buttons, inputs, and the wordmark link are live CSS (not screenshots). Source: <code>src/components/ui/*.tsx</code> + grep across <code>src/pages</code> and <code>src/components</code> as of the current working tree.
+  </footer>
+
+</div>
+</body>
+</html>

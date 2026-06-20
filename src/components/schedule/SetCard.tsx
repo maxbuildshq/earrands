@@ -1,10 +1,8 @@
 import { useState } from 'react'
 import type { SetWithStage, SetArtistWithBio } from '../../types/database'
-import { useAuth } from '../../hooks/useAuth'
-import { GoingToggle } from '../actions/GoingToggle'
-import { RatingButtons } from '../actions/RatingButtons'
-import { BottomSheet } from '../common/BottomSheet'
-import { AuthPrompt } from '../common/AuthPrompt'
+import { SetActions } from '../actions/SetActions'
+import { Badge } from '../ui/Badge'
+import { Heading } from '../ui/Heading'
 
 type Props = {
   set: SetWithStage
@@ -28,36 +26,29 @@ function getLeadImage(artists: SetArtistWithBio[] | null): string | null {
 }
 
 export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, onOpenSheet, showConflict }: Props) {
-  const { user } = useAuth()
-  const [authPromptOpen, setAuthPromptOpen] = useState(false)
   const [imgError, setImgError] = useState(false)
   const leadImage = getLeadImage(set.set_artists)
 
-  const handleToggleGoing = () => {
-    if (!user) { setAuthPromptOpen(true); return }
-    onToggleGoing()
-  }
-  const handleRate = (value: -1 | 1) => {
-    if (!user) { setAuthPromptOpen(true); return }
-    onRate(value)
-  }
-
   return (
-    <>
-      <div
+    <div
         role="button"
         tabIndex={0}
         onClick={onOpenSheet}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
-        className={`relative bg-surface-raised border p-3 transition-colors cursor-pointer hover:bg-surface-hover ${
-          isNow ? 'border-acid shadow-[0_0_20px_rgba(204,255,0,0.4),0_0_40px_rgba(204,255,0,0.15)]' : 'border-border'
-        } ${showConflict ? 'border-conflict' : ''}`}
+        className="relative bg-surface-raised border border-border p-3 transition-colors cursor-pointer hover:bg-surface-hover"
+        style={{
+          ...(isNow ? { borderColor: 'var(--color-accent)', boxShadow: 'var(--shadow-now)' } : {}),
+          ...(showConflict && !isNow ? { borderLeftColor: 'var(--color-conflict)', borderLeftWidth: 3 } : {}),
+        }}
       >
         {isNow && (
-          <div className="absolute top-0 left-0 w-1.5 h-full bg-acid animate-pulse" />
+          <div className="absolute top-0 left-0 w-1.5 h-full bg-accent animate-pulse" />
         )}
         {showConflict && !isNow && (
-          <div className="absolute top-0 left-0 w-1 h-full bg-conflict" />
+          <div
+            className="absolute top-0 left-0 right-0 h-1.5"
+            style={{ background: 'repeating-linear-gradient(135deg, var(--color-conflict) 0 7px, var(--color-surface) 7px 14px)' }}
+          />
         )}
 
         <div className="flex items-start justify-between gap-3">
@@ -72,9 +63,9 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
                   loading="lazy"
                 />
               )}
-              <h3 className={`font-mono font-bold text-base truncate ${isNow ? 'text-acid' : 'text-text-primary'}`}>
+              <Heading variant="card" className={`truncate ${isNow ? 'text-accent' : ''}`}>
                 {set.artist_name}
-              </h3>
+              </Heading>
             </div>
 
             <div className="flex items-center gap-2 text-sm text-text-secondary">
@@ -90,26 +81,20 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
               {set.is_live && (
                 <>
                   <span className="text-border">·</span>
-                  <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-live text-white uppercase leading-none">
-                    Live
-                  </span>
+                  <Badge variant="live" className="text-white">Live</Badge>
+                </>
+              )}
+              {showConflict && !isNow && (
+                <>
+                  <span className="text-border">·</span>
+                  <Badge variant="conflict">Clash</Badge>
                 </>
               )}
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <GoingToggle isGoing={isGoing} onToggle={handleToggleGoing} />
-            <RatingButtons rating={rating} onRate={handleRate} />
-          </div>
+          <SetActions isGoing={isGoing} rating={rating} onToggleGoing={onToggleGoing} onRate={onRate} />
         </div>
       </div>
-
-      {authPromptOpen && (
-        <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthPromptOpen(false)}>
-          <AuthPrompt message="Create an account to mark sets you're going to and rate them." />
-        </BottomSheet>
-      )}
-    </>
   )
 }

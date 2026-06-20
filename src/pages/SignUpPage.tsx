@@ -2,6 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import posthog from 'posthog-js'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Label } from '../components/ui/Label'
+import { Heading } from '../components/ui/Heading'
 
 export function SignUpPage() {
   const [email, setEmail] = useState('')
@@ -39,12 +43,12 @@ export function SignUpPage() {
     return (
       <div className="flex items-center justify-center min-h-[80vh] px-4">
         <div className="w-full max-w-sm text-center">
-          <h1 className="font-mono font-bold text-2xl text-acid mb-4 tracking-tight">CHECK YOUR EMAIL</h1>
-          <p className="text-text-secondary mb-6">
+          <Heading variant="page" className="mb-4">CHECK YOUR EMAIL</Heading>
+          <p className="font-mono text-text-secondary mb-6">
             We sent a confirmation link to <span className="text-text-primary">{email}</span>.
             Click it to activate your account.
           </p>
-          <Link to="/login" className="text-acid hover:underline text-sm font-mono">BACK TO LOGIN</Link>
+          <Link to="/login" className="text-accent font-mono font-bold text-sm uppercase tracking-wider hover:text-accent-dim transition-colors">BACK TO LOGIN</Link>
         </div>
       </div>
     )
@@ -53,42 +57,22 @@ export function SignUpPage() {
   return (
     <div className="flex items-center justify-center min-h-[80vh] px-4">
       <div className="w-full max-w-sm">
-        <h1 className="font-mono font-bold text-2xl text-acid mb-8 tracking-tight">SIGN UP</h1>
+        <Heading variant="page" className="mb-8">SIGN UP</Heading>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
-            />
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
 
           <div>
-            <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
-            />
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
           </div>
 
           <div>
-            <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Confirm password</label>
-            <input
-              type="password"
-              value={confirm}
-              onChange={e => setConfirm(e.target.value)}
-              required
-              minLength={6}
-              className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
-            />
+            <Label htmlFor="confirm">Confirm password</Label>
+            <Input id="confirm" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required minLength={6} />
           </div>
 
           <label className="flex items-start gap-2 cursor-pointer select-none">
@@ -96,29 +80,23 @@ export function SignUpPage() {
               type="checkbox"
               checked={marketing}
               onChange={e => setMarketing(e.target.checked)}
-              className="mt-0.5 w-4 h-4 shrink-0 accent-acid"
+              className="mt-0.5 w-4 h-4 shrink-0 accent-accent"
             />
             <span className="text-text-secondary text-xs leading-relaxed">
               Email me occasional updates worth reading — new festivals and major features. No spam, unsubscribe anytime.
             </span>
           </label>
 
-          {error && (
-            <div className="text-live text-sm font-mono">{error}</div>
-          )}
+          {error && <div className="text-negative text-sm font-mono">{error}</div>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={loading}>
             {loading ? 'CREATING ACCOUNT...' : 'CREATE ACCOUNT'}
-          </button>
+          </Button>
         </form>
 
-        <p className="mt-6 text-text-secondary text-sm text-center">
+        <p className="mt-6 text-text-secondary text-sm text-center font-mono">
           Already have an account?{' '}
-          <Link to="/login" className="text-acid hover:underline">Log in</Link>
+          <Link to="/login" className="text-accent font-bold uppercase tracking-wider hover:text-accent-dim transition-colors">Log in</Link>
         </p>
       </div>
     </div>

@@ -64,3 +64,15 @@ export function formatDayLabel(dateStr: string): string {
     month: 'short',
   }).toUpperCase()
 }
+
+/** Short scrollable-chip label: weekday + day number, e.g. "FRI 31". */
+export function formatDayChip(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' }).toUpperCase()
+}
+
+/** Festival date range for the header sub-line: "WED 29 JUL – SUN 2 AUG" (single date if start === end). */
+export function formatDateRange(startDate: string, endDate: string): string {
+  if (startDate === endDate) return formatDayLabel(startDate)
+  return `${formatDayLabel(startDate)} – ${formatDayLabel(endDate)}`
+}

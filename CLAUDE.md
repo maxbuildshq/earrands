@@ -20,8 +20,8 @@ Voice, positioning, and copy rules: [`docs/brand.md`](docs/brand.md). Read befor
 
 Dark, raw, industrial brutalist — techno festival, not a startup dashboard.
 
-- Near-black background (`#0A0A0A`), acid lime accent (`#CCFF00`)
-- Space Mono + Barlow Condensed typography
+- Near-black background (`#0A0A0A`), acid lime accent (`#CCFF00`) — token name is `--color-accent`, not `acid` ([010](docs/decisions/010-design-system-primitives.md))
+- Chakra Petch typography (squared techno grotesk, app-wide) ([009](docs/decisions/009-typography-chakra-petch.md))
 - **`text-secondary` = `#FFFFFF` white, not grey** — grey is invisible outdoors in sunlight ([001](docs/decisions/001-outdoor-contrast.md))
 - Mobile-first, functional density, minimal decoration
 
@@ -52,9 +52,10 @@ src/
   hooks/                     # useFestivalData, useUserPlan, useFestivalFollows, useFestivalRequests
   pages/                     # FestivalListPage, SchedulePage, MySchedulePage, Login/SignUp
   components/
+    ui/                      # Button, Input, Label — shared primitives, use for any new UI ([010](docs/decisions/010-design-system-primitives.md))
     layout/                  # Header (FeedbackButton portalled here), Layout
     schedule/                # DayToggle, StageFilter, SetCard, SetSheet, LineupView
-    actions/                 # GoingToggle, RatingButtons
+    actions/                 # SetActions (going/rating buttons)
     common/                  # BottomSheet, AuthPrompt, OfflineNotice
     festival/                # FollowButton, RequestFestivalCTA, RequestFestivalSheet, ShareScheduleSheet
     feedback/FeedbackButton.tsx
@@ -82,15 +83,27 @@ Full rationale in `docs/decisions/`. These cause bugs if forgotten:
 - Date from string: always `T12:00:00` to avoid UTC shift bugs ([002](docs/decisions/002-date-timezone.md))
 - `day` field = festival day, not calendar day; after-midnight cutoff = `07:00` ([003](docs/decisions/003-cross-midnight-sets.md))
 - `FeedbackButton` must portal to `document.body` — header `backdrop-filter` clips `fixed` children ([004](docs/decisions/004-feedback-portal.md))
+- Typography: Chakra Petch app-wide, replacing Space Mono + Barlow Condensed ([009](docs/decisions/009-typography-chakra-petch.md))
 - Combo bio vs individual bio display — `resolveArtists()` in `SetSheet.tsx` ([005](docs/decisions/005-combo-bio.md))
 - Deploy: `npx wrangler deploy`, NOT `wrangler pages deploy` ([006](docs/decisions/006-wrangler-deploy.md))
 - Marketing consent checkbox: unchecked by default (GDPR) ([007](docs/decisions/007-marketing-consent.md))
+- Design tokens are `--color-accent`/`--color-accent-dim` (not `acid`) and `--color-negative` (errors, negative-rating active state) is separate from `--color-live` (Live badge only); use the `Button`/`Input`/`Label` primitives in `src/components/ui/` for new UI ([010](docs/decisions/010-design-system-primitives.md))
 
 Forward-looking (not bug-prevention): iOS/Android migration app-size strategy — options open, principles to follow before the native build ([008](docs/decisions/008-ios-migration-app-size.md)).
 
 When you discover a new non-obvious constraint, add a bullet here and create `docs/decisions/NNN-title.md`. When a pattern in `scripts/` or `supabase/` changes, update the relevant subdirectory CLAUDE.md.
 
 ## Key Patterns
+
+### UI primitives
+
+`src/components/ui/` holds the canonical building blocks — use them instead of retyping Tailwind class strings:
+- `Button` — variants: `primary`/`secondary`/`accent-outline` (full-width CTAs), `accent-toggle` (full-width, solid when active), `icon`/`icon-toggle`/`danger` (32×32 square), `segment` (borderless, shared-border group like DayToggle/All-Picks), `choice` (bordered standalone item like sentiment/template pickers).
+- `Input`, `Label` — form fields; `Label` is for field captions only, not general text.
+- `Heading` — variants `page`/`content`/`section`/`sheet`; not for card titles or body text.
+- `Badge` — small uppercase pills, variants `live`/`accent`/`accent-outline`/`outline`.
+
+See [010](docs/decisions/010-design-system-primitives.md) for the full rationale and variant guide.
 
 ### BottomSheet + AuthPrompt
 
