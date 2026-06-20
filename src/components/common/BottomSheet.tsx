@@ -1,7 +1,10 @@
 import { useEffect, useRef, useCallback, type ReactNode } from 'react'
+import { Button } from '../ui/Button'
+import { Heading } from '../ui/Heading'
 
 type Props = {
   title?: string
+  headerContent?: ReactNode
   onClose: () => void
   children: ReactNode
 }
@@ -10,7 +13,7 @@ type Props = {
  * Reusable bottom-sheet shell — backdrop, slide-up, swipe-to-dismiss, Escape, scroll-lock.
  * Mirrors the interaction model of SetSheet; used by the request/follow flows.
  */
-export function BottomSheet({ title, onClose, children }: Props) {
+export function BottomSheet({ title, headerContent, onClose, children }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
@@ -83,21 +86,19 @@ export function BottomSheet({ title, onClose, children }: Props) {
 
         {/* Header */}
         <div className="px-4 pb-3 shrink-0 flex items-start justify-between gap-3">
-          {title ? (
-            <h2 className="font-mono font-bold text-lg text-text-primary leading-tight">{title}</h2>
+          {headerContent ? (
+            <div className="min-w-0 flex-1">{headerContent}</div>
+          ) : title ? (
+            <Heading variant="sheet">{title}</Heading>
           ) : (
             <span />
           )}
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center border border-border text-text-secondary hover:text-text-primary hover:border-text-secondary transition-colors shrink-0"
-            title="Close"
-          >
+          <Button variant="icon" onClick={onClose} title="Close" className="shrink-0">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="2" y1="2" x2="12" y2="12" />
               <line x1="12" y1="2" x2="2" y2="12" />
             </svg>
-          </button>
+          </Button>
         </div>
 
         <div className="overflow-y-auto flex-1 min-h-0">

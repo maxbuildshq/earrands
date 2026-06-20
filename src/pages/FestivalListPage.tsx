@@ -3,6 +3,8 @@ import { useFestivals } from '../hooks/useFestivalData'
 import type { Festival } from '../types/database'
 import { RequestFestivalCTA } from '../components/festival/RequestFestivalCTA'
 import { FollowButton } from '../components/festival/FollowButton'
+import { Heading } from '../components/ui/Heading'
+import { Badge } from '../components/ui/Badge'
 import posthog from 'posthog-js'
 
 function formatDateRange(start: string, end: string): string {
@@ -40,7 +42,7 @@ export function FestivalListPage() {
 
       {upcoming.length > 0 && (
         <section>
-          <h2 className="font-mono font-bold text-xs text-acid uppercase tracking-widest mb-3">Upcoming</h2>
+          <Heading variant="section" className="text-accent mb-3">Upcoming</Heading>
           <div className="space-y-3">
             {upcoming.map(f => (
               <FestivalCard key={f.id} festival={f} />
@@ -51,7 +53,7 @@ export function FestivalListPage() {
 
       {past.length > 0 && (
         <section>
-          <h2 className="font-mono font-bold text-xs text-text-secondary uppercase tracking-widest mb-3">Past</h2>
+          <Heading variant="section" className="text-text-secondary mb-3">Past</Heading>
           <div className="space-y-3">
             {past.map(f => (
               <FestivalCard key={f.id} festival={f} />
@@ -76,7 +78,7 @@ function FestivalCard({ festival }: { festival: Festival }) {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-mono font-bold text-base text-text-primary">{festival.name}</h3>
+            <Heading variant="card">{festival.name}</Heading>
             <div className="flex items-center gap-2 mt-1 text-sm text-text-secondary">
               <span>{formatDateRange(festival.start_date, festival.end_date)}</span>
               {festival.location && (
@@ -89,17 +91,11 @@ function FestivalCard({ festival }: { festival: Festival }) {
           </div>
           <div className="shrink-0">
             {past ? (
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-border text-text-secondary uppercase">
-                Past
-              </span>
+              <Badge variant="outline">Past</Badge>
             ) : festival.timetable_announced ? (
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-acid text-surface uppercase">
-                Timetable
-              </span>
+              <Badge variant="accent">Timetable</Badge>
             ) : (
-              <span className="px-2 py-0.5 text-[10px] font-mono font-bold border border-acid text-acid uppercase">
-                Lineup
-              </span>
+              <Badge variant="accent-outline">Lineup</Badge>
             )}
           </div>
         </div>

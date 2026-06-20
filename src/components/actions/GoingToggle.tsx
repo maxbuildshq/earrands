@@ -1,3 +1,5 @@
+import { Button } from '../ui/Button'
+
 type Props = {
   isGoing: boolean
   onToggle: () => void
@@ -5,14 +7,12 @@ type Props = {
 
 export function GoingToggle({ isGoing, onToggle }: Props) {
   return (
-    <button
+    <Button
+      variant="icon-toggle"
+      active={isGoing}
       onClick={onToggle}
       title={isGoing ? 'Remove from my sets' : 'Add to my sets'}
-      className={`w-8 h-8 flex items-center justify-center border transition-colors ${
-        isGoing
-          ? 'bg-acid text-surface border-acid'
-          : 'bg-transparent text-text-secondary border-border hover:border-text-secondary'
-      }`}
+      aria-pressed={isGoing}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
         {isGoing ? (
@@ -24,6 +24,6 @@ export function GoingToggle({ isGoing, onToggle }: Props) {
           </>
         )}
       </svg>
-    </button>
+    </Button>
   )
 }

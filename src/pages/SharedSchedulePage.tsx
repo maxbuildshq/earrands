@@ -9,6 +9,8 @@ import { SetCard } from '../components/schedule/SetCard'
 import { SetSheet } from '../components/schedule/SetSheet'
 import { BottomSheet } from '../components/common/BottomSheet'
 import { AuthPrompt } from '../components/common/AuthPrompt'
+import { Button } from '../components/ui/Button'
+import { Heading } from '../components/ui/Heading'
 import { formatDayLabel } from '../lib/dates'
 import type { SetWithStage } from '../types/database'
 
@@ -45,7 +47,7 @@ export function SharedSchedulePage() {
     if (!festival) return
     importSchedule.mutate(
       { setIds: shared!.set_ids, festivalName: festival.name },
-      { onSuccess: () => navigate(`/festivals/${slug}/my-schedule`) },
+      { onSuccess: () => navigate(`/festivals/${slug}/schedule`) },
     )
   }
 
@@ -63,7 +65,7 @@ export function SharedSchedulePage() {
         <p className="text-text-secondary font-mono text-sm">SCHEDULE NOT FOUND</p>
         <Link
           to={`/festivals/${slug}/schedule`}
-          className="px-4 py-2 bg-acid text-surface font-mono font-bold text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors"
+          className="px-4 py-2 bg-accent text-surface font-mono font-bold text-sm uppercase tracking-wider hover:bg-accent-dim transition-colors"
         >
           Browse Schedule
         </Link>
@@ -74,7 +76,7 @@ export function SharedSchedulePage() {
   return (
     <div className="pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))] space-y-2">
       <div className="flex items-center justify-between mb-2">
-        <h1 className="font-mono font-bold text-lg text-acid tracking-tight">SHARED SCHEDULE</h1>
+        <Heading variant="content">SHARED SCHEDULE</Heading>
         <span className="text-text-secondary text-sm font-mono">{sharedSets.length} sets</span>
       </div>
 
@@ -115,17 +117,17 @@ export function SharedSchedulePage() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 pt-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-surface/95 backdrop-blur-sm border-t border-border">
-        <button
+        <Button
           onClick={handleSaveAll}
+          variant="primary"
           disabled={allAlreadySaved || importSchedule.isPending}
-          className="w-full bg-acid text-surface font-mono font-bold py-3 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors disabled:opacity-50"
         >
           {importSchedule.isPending
             ? 'SAVING…'
             : allAlreadySaved
               ? 'Already in My Schedule'
               : 'Save to My Schedule'}
-        </button>
+        </Button>
       </div>
 
       {sheetSet && (

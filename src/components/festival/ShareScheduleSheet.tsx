@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import posthog from 'posthog-js'
 import { BottomSheet } from '../common/BottomSheet'
+import { Button } from '../ui/Button'
 import { TEMPLATES, drawSchedule, buildShareFilename } from '../../lib/shareImage'
 import { useCreateSharedSchedule } from '../../hooks/useSharedSchedule'
 import type { SetWithStage } from '../../types/database'
@@ -98,18 +99,17 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
       <div className="px-4 pb-8 pt-1 space-y-4">
         <div className="flex gap-2">
           {TEMPLATES.map((t, i) => (
-            <button
+            <Button
               key={t.id}
               type="button"
+              variant="choice"
+              active={i === templateIdx}
+              fullWidth={false}
               onClick={() => setTemplateIdx(i)}
-              className={`flex-1 py-2 px-2 font-mono text-xs uppercase tracking-wider border transition-colors ${
-                i === templateIdx
-                  ? 'bg-acid text-surface border-acid'
-                  : 'bg-surface text-text-secondary border-border hover:border-text-secondary'
-              }`}
+              className="flex-1 py-2 px-2"
             >
               {t.label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -121,22 +121,15 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
           />
         </div>
 
-        {error && <div className="text-live text-sm font-mono">{error}</div>}
+        {error && <div className="text-negative text-sm font-mono">{error}</div>}
 
         <div className="flex flex-col gap-2">
-          <button
-            onClick={handleShare}
-            disabled={busy}
-            className="w-full bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors disabled:opacity-50"
-          >
+          <Button onClick={handleShare} variant="primary" disabled={busy}>
             {busy ? 'PREPARING…' : 'Share'}
-          </button>
-          <button
-            onClick={handleDownload}
-            className="w-full border border-border text-text-secondary font-mono py-2.5 text-sm uppercase tracking-wider hover:border-text-secondary hover:text-text-primary transition-colors"
-          >
+          </Button>
+          <Button onClick={handleDownload} variant="secondary">
             Download image
-          </button>
+          </Button>
         </div>
       </div>
     </BottomSheet>

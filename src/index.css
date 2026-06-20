@@ -1,13 +1,12 @@
 @import "tailwindcss";
-@import "@fontsource/space-mono/400.css";
-@import "@fontsource/space-mono/700.css";
-@import "@fontsource/barlow-condensed/400.css";
-@import "@fontsource/barlow-condensed/500.css";
-@import "@fontsource/barlow-condensed/600.css";
+@import "@fontsource/chakra-petch/400.css";
+@import "@fontsource/chakra-petch/500.css";
+@import "@fontsource/chakra-petch/600.css";
+@import "@fontsource/chakra-petch/700.css";
 
 @theme {
-  --color-acid: #CCFF00;
-  --color-acid-dim: #99CC00;
+  --color-accent: #CCFF00;
+  --color-accent-dim: #99CC00;
   --color-surface: #0A0A0A;
   --color-surface-raised: #141414;
   --color-surface-hover: #1E1E1E;
@@ -15,9 +14,15 @@
   --color-text-primary: #E5E5E5;
   --color-text-secondary: #FFFFFF;
   --color-live: #FF3B3B;
+  --color-negative: #FF3B3B;
   --color-conflict: #FF6B2B;
-  --font-mono: "Space Mono", monospace;
-  --font-condensed: "Barlow Condensed", sans-serif;
+  --color-grid-line: #161616;
+  --color-lane-line: #1C1C1C;
+  --color-border-subtle: #2c2c2c;
+  --color-text-dim: #8a8a8a;
+  --shadow-now: 0 0 20px rgba(204,255,0,0.4), 0 0 40px rgba(204,255,0,0.15);
+  --font-mono: "Chakra Petch", sans-serif;
+  --font-condensed: "Chakra Petch", sans-serif;
 }
 
 body {
@@ -33,6 +38,8 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
 }
+
+button, [role="button"], a, summary, select { cursor: pointer; }
 
 input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0 30px var(--color-surface-raised) inset !important;
@@ -55,4 +62,74 @@ input:-webkit-autofill {
 
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
+}
+
+/* Atmosphere — procedural fog. Boiling = cross-fading flipbook of pre-baked noise
+   frames + drift; motion is transform/opacity only (GPU compositor, no per-frame filter). */
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.atmosphere .fl {
+  position: absolute;
+  inset: -30%;
+  background: var(--color-accent);
+  -webkit-mask-size: cover;
+  mask-size: cover;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  filter: blur(5px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: atm-fade var(--atm-boil) ease-in-out infinite, atm-drift var(--atm-drift) ease-in-out infinite;
+}
+.atmosphere .fl0 { animation-delay: 0s, 0s; }
+.atmosphere .fl1 { animation-delay: calc(var(--atm-boil) * -0.25), -4s; transform-origin: 70% 30%; }
+.atmosphere .fl2 { animation-delay: calc(var(--atm-boil) * -0.5), -9s; transform-origin: 30% 70%; }
+.atmosphere .fl3 { animation-delay: calc(var(--atm-boil) * -0.75), -14s; transform-origin: 80% 80%; }
+.atmosphere .beam {
+  position: absolute;
+  top: -15%;
+  width: 42%;
+  height: 90%;
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--color-accent) 95%, transparent), color-mix(in srgb, var(--color-accent) 30%, transparent) 28%, transparent 46%);
+  filter: blur(7px);
+  mix-blend-mode: screen;
+  opacity: var(--atm-light);
+  will-change: transform;
+}
+.atmosphere .beam1 { left: 0; animation: atm-sweep1 var(--atm-ldur) ease-in-out infinite; }
+.atmosphere .beam2 { left: 0; width: 30%; opacity: calc(var(--atm-light) * 0.8); animation: atm-sweep2 calc(var(--atm-ldur) * 0.7) ease-in-out infinite; }
+.atmosphere.paused .fl, .atmosphere.paused .beam { animation-play-state: paused; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent) 38%, transparent); }
+  50% { box-shadow: 0 0 24px color-mix(in srgb, var(--color-accent) 68%, transparent); }
+}
+.animate-pulse-glow { animation: pulse-glow 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .animate-pulse-glow { animation: none; } }
+
+@keyframes atm-fade { 0%, 100% { opacity: 0; } 45% { opacity: var(--atm-fog); } }
+@keyframes atm-drift {
+  0% { transform: translate3d(-4%, 3%, 0) scale(1.05); }
+  50% { transform: translate3d(6%, -5%, 0) scale(1.35); }
+  100% { transform: translate3d(-4%, 3%, 0) scale(1.05); }
+}
+@keyframes atm-sweep1 {
+  0% { transform: translate3d(-45%, -8%, 0); }
+  50% { transform: translate3d(150%, 18%, 0); }
+  100% { transform: translate3d(-45%, -8%, 0); }
+}
+@keyframes atm-sweep2 {
+  0% { transform: translate3d(180%, 12%, 0); }
+  50% { transform: translate3d(-50%, -12%, 0); }
+  100% { transform: translate3d(180%, 12%, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atmosphere .fl, .atmosphere .beam { animation: none !important; }
+  .atmosphere .fl { opacity: calc(var(--atm-fog) * 0.5); }
 }

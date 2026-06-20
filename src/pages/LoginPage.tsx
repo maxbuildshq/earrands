@@ -2,6 +2,10 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import posthog from 'posthog-js'
+import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Label } from '../components/ui/Label'
+import { Heading } from '../components/ui/Heading'
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -34,48 +38,29 @@ export function LoginPage() {
   return (
     <div className="flex items-center justify-center min-h-[80vh] px-4">
       <div className="w-full max-w-sm">
-        <h1 className="font-mono font-bold text-2xl text-acid mb-8 tracking-tight">LOGIN</h1>
+        <Heading variant="page" className="mb-8">LOGIN</Heading>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-              className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
-            />
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           </div>
 
           <div>
-            <label className="block text-text-secondary text-sm mb-1 uppercase tracking-wider">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full bg-surface-raised border border-border text-text-primary px-3 py-2.5 text-base outline-none focus:border-acid transition-colors"
-            />
+            <Label htmlFor="password">Password</Label>
+            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
           </div>
 
-          {error && (
-            <div className="text-live text-sm font-mono">{error}</div>
-          )}
+          {error && <div className="text-negative text-sm font-mono">{error}</div>}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-acid text-surface font-mono font-bold py-2.5 text-sm uppercase tracking-wider hover:bg-acid-dim transition-colors disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={loading}>
             {loading ? 'SIGNING IN...' : 'SIGN IN'}
-          </button>
+          </Button>
         </form>
 
-        <p className="mt-6 text-text-secondary text-sm text-center">
+        <p className="mt-6 text-text-secondary text-sm text-center font-mono">
           No account?{' '}
-          <Link to="/signup" className="text-acid hover:underline">Sign up</Link>
+          <Link to="/signup" className="text-accent font-bold uppercase tracking-wider hover:text-accent-dim transition-colors">Sign up</Link>
         </p>
       </div>
     </div>
