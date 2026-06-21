@@ -44,6 +44,25 @@ export type Flag = {
   message: string
 }
 
+// ── Festival name extraction ────────────────────────────────────────────────
+
+export function extractFestivalRootName(festivalName: string): string {
+  return festivalName
+    .replace(/\b20\d{2}\b/g, '')
+    .replace(/\b(festival|edition|presents?|weekend|week)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .join(' ')
+    .trim()
+}
+
+export function bioContainsFestivalName(bio: string, festivalRootName: string): boolean {
+  if (!festivalRootName) return false
+  return bio.toLowerCase().includes(festivalRootName.toLowerCase())
+}
+
 // ── Pure functions ──────────────────────────────────────────────────────────
 
 export function normalizeTime(t: string | null): string | null {
@@ -428,6 +447,30 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
     scraped.artists.map(a => [a.name.toLowerCase(), a])
   )
 
+  // Extract root festival brand name for bio flagging
+  const festivalRootName = extractFestivalRootName(f.name)
+
+  function emitArtistUpsert(name: string, sortName: string, isCollective: boolean, bio: string | null, sourceUrl: string | null, comment?: string) {
+    const flagged = bio && bioContainsFestivalName(bio, festivalRootName)
+    if (flagged) {
+      lines.push(`  -- ⚠ BIO FLAG: contains festival name '${escSql(festivalRootName)}'`)
+    }
+    if (comment) lines.push(`  -- ${comment}`)
+    const bioSource = bio ? `festival:${slug}` : null
+    const cols = ['name', 'sort_name', 'is_collective']
+    const vals = [`'${escSql(name)}'`, `'${escSql(sortName)}'`, String(isCollective)]
+    if (bio) { cols.push('bio'); vals.push(`'${escSql(bio)}'`) }
+    if (sourceUrl) { cols.push('source_url'); vals.push(`'${escSql(sourceUrl)}'`) }
+    if (bioSource) { cols.push('bio_source'); vals.push(`'${escSql(bioSource)}'`) }
+    lines.push(`  INSERT INTO artists (${cols.join(', ')})`)
+    lines.push(`  VALUES (${vals.join(', ')})`)
+    lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
+    lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
+    lines.push(`    bio_source = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio_source ELSE artists.bio_source END,`)
+    lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
+    lines.push('')
+  }
+
   for (const set of scraped.sets) {
     const parsed = parseArtistName(set.artist_name)
 
@@ -436,14 +479,7 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       if (!processedArtists.has(sortName)) {
         processedArtists.add(sortName)
         const scraperArtist = scrapedBios.get(sortName)
-        const bio = scraperArtist?.bio
-        const sourceUrl = scraperArtist?.source_url
-        lines.push(`  INSERT INTO artists (name, sort_name, is_collective${bio ? ', bio' : ''}${sourceUrl ? ', source_url' : ''})`)
-        lines.push(`  VALUES ('${escSql(parsed.collective)}', '${escSql(sortName)}', true${bio ? `, '${escSql(bio)}'` : ''}${sourceUrl ? `, '${escSql(sourceUrl)}'` : ''})`)
-        lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
-        lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
-        lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
-        lines.push('')
+        emitArtistUpsert(parsed.collective, sortName, true, scraperArtist?.bio ?? null, scraperArtist?.source_url ?? null)
       }
     }
 
@@ -452,34 +488,16 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       if (!sortName || processedArtists.has(sortName)) continue
       processedArtists.add(sortName)
       const scraperArtist = scrapedBios.get(sortName)
-      const bio = scraperArtist?.bio
-      const sourceUrl = scraperArtist?.source_url
-      lines.push(`  INSERT INTO artists (name, sort_name, is_collective${bio ? ', bio' : ''}${sourceUrl ? ', source_url' : ''})`)
-      lines.push(`  VALUES ('${escSql(member)}', '${escSql(sortName)}', false${bio ? `, '${escSql(bio)}'` : ''}${sourceUrl ? `, '${escSql(sourceUrl)}'` : ''})`)
-      lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
-      lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
-      lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
-      lines.push('')
+      emitArtistUpsert(member, sortName, false, scraperArtist?.bio ?? null, scraperArtist?.source_url ?? null)
     }
 
-    // For multi-artist sets without a parsed collective (e.g. "PLO Man & Skee Mask"),
-    // check if the scraper has a combo bio under the full set name.
-    // Dekmantel stores one bio per timeslot, so the bio is keyed to the combined name.
     if (!parsed.collective && parsed.members.length > 1) {
       const comboSortName = set.artist_name.toLowerCase().trim()
       if (!processedArtists.has(comboSortName)) {
         const scraperArtist = scrapedBios.get(comboSortName)
         if (scraperArtist?.bio) {
           processedArtists.add(comboSortName)
-          const bio = scraperArtist.bio
-          const sourceUrl = scraperArtist.source_url
-          lines.push(`  -- Combo bio for multi-artist set`)
-          lines.push(`  INSERT INTO artists (name, sort_name, is_collective, bio${sourceUrl ? ', source_url' : ''})`)
-          lines.push(`  VALUES ('${escSql(set.artist_name)}', '${escSql(comboSortName)}', false, '${escSql(bio)}'${sourceUrl ? `, '${escSql(sourceUrl)}'` : ''})`)
-          lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
-          lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
-          lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
-          lines.push('')
+          emitArtistUpsert(set.artist_name, comboSortName, false, scraperArtist.bio, scraperArtist.source_url ?? null, 'Combo bio for multi-artist set')
         }
       }
     }

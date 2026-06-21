@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import type { EnrichmentResult, ReviewFile, ProgressFile } from './types.js'
+import type { EnrichmentResult, ReviewFile, ProgressFile, BioResearchFile } from './types.js'
 
 const REVIEW_DIR = 'enrichment-review'
 
@@ -72,4 +72,45 @@ export function clearProgress(festival: string | null): void {
   if (existsSync(path)) {
     writeFileSync(path, JSON.stringify({ festival, completed_sort_names: [], updated_at: new Date().toISOString() }, null, 2))
   }
+}
+
+// ── Bio research files ──────────────────────────────────────────────────
+
+const BIO_CHUNK_SIZE = 25
+
+export function writeBioResearchFiles(festival: string | null, results: EnrichmentResult[]): string[] {
+  ensureDir()
+  const slug = festival ?? 'all'
+
+  const artistsWithResearch = results
+    .filter(r => r.bio_research && r.bio_research.web_sources.length > 0)
+    .map(r => ({
+      sort_name: r.sort_name,
+      display_name: r.display_name,
+      bio_research: r.bio_research!,
+    }))
+
+  if (artistsWithResearch.length === 0) return []
+
+  const totalChunks = Math.ceil(artistsWithResearch.length / BIO_CHUNK_SIZE)
+  const paths: string[] = []
+
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = artistsWithResearch.slice(i * BIO_CHUNK_SIZE, (i + 1) * BIO_CHUNK_SIZE)
+    const chunkNum = String(i + 1).padStart(2, '0')
+    const path = `${REVIEW_DIR}/${slug}-bio-chunk-${chunkNum}.json`
+
+    const file: BioResearchFile = {
+      generated_at: new Date().toISOString(),
+      festival,
+      chunk: i + 1,
+      total_chunks: totalChunks,
+      artists: chunk,
+    }
+
+    writeFileSync(path, JSON.stringify(file, null, 2))
+    paths.push(path)
+  }
+
+  return paths
 }
