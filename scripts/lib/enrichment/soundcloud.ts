@@ -7,6 +7,9 @@ export type SoundCloudProfile = {
   bandcamp_url: string | null
   website_url: string | null
   track_urls: string[]
+  city: string | null
+  country_code: string | null
+  bio: string | null
 }
 
 type WebProfile = {
@@ -22,6 +25,7 @@ export async function scrapeSoundCloudProfile(profileUrl: string): Promise<Sound
     const $ = await fetchWithCheerio(profileUrl)
     const image_url = extractProfileImage($)
     const track_urls = extractTrackUrls($, profileUrl)
+    const { city, country_code, bio } = extractHydrationData($)
 
     // Use Playwright to intercept the web-profiles API call — social links are not in SSR HTML
     const webProfiles = await fetchWebProfiles(profileUrl)
@@ -33,6 +37,9 @@ export async function scrapeSoundCloudProfile(profileUrl: string): Promise<Sound
       bandcamp_url: links.bandcamp,
       website_url: links.website,
       track_urls,
+      city,
+      country_code,
+      bio,
     }
   } catch {
     return null
@@ -100,7 +107,34 @@ function extractLinksFromWebProfiles(profiles: WebProfile[]): {
   return { instagram, bandcamp, website }
 }
 
-function extractProfileImage($: ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never): string | null {
+type CheerioRoot = ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never
+
+function extractHydrationData($: CheerioRoot): { city: string | null; country_code: string | null; bio: string | null } {
+  let city: string | null = null
+  let country_code: string | null = null
+  let bio: string | null = null
+
+  $('script').each((_, el) => {
+    const text = $(el).html()
+    if (!text?.includes('__sc_hydration')) return
+    const match = text.match(/__sc_hydration\s*=\s*(\[.*\])/)
+    if (!match) return
+
+    try {
+      const hydration = JSON.parse(match[1]) as Array<{ hydratable: string; data: any }>
+      const userEntry = hydration.find(h => h.hydratable === 'user')
+      if (userEntry?.data) {
+        city = userEntry.data.city || null
+        country_code = userEntry.data.country_code || null
+        bio = userEntry.data.description || null
+      }
+    } catch {}
+  })
+
+  return { city, country_code, bio }
+}
+
+function extractProfileImage($: CheerioRoot): string | null {
   const avatar = $('img[src*="sndcdn.com/avatars"]').first().attr('src')
   if (avatar) {
     return avatar.replace(/-large\./, '-t500x500.')
@@ -115,7 +149,7 @@ function extractProfileImage($: ReturnType<typeof fetchWithCheerio> extends Prom
 }
 
 function extractTrackUrls(
-  $: ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never,
+  $: CheerioRoot,
   profileUrl: string,
 ): string[] {
   const urls: string[] = []

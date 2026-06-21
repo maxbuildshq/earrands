@@ -78,6 +78,13 @@ export type Artist = {
   bandcamp_url: string | null
   discogs_id: number | null
   enriched_at: string | null
+  city: string | null
+  country_code: string | null
+  bio_source: string | null
+  bio_festival: string | null
+  bio_sources: Array<{ url: string; title: string; snippet: string; type: string }> | null
+  bio_generated: string | null
+  enrichment_status: string | null
   created_at: string
 }
 
@@ -102,6 +109,8 @@ export type FestivalRequest = {
   user_id: string
   raw_name: string
   region: string | null
+  notified_at: string | null
+  matched_festival_id: string | null
   created_at: string
 }
 
@@ -113,4 +122,28 @@ export type SharedSchedule = {
   set_ids: string[]
   created_at: string
   updated_at: string
+}
+
+export type NotificationLog = {
+  id: string
+  type: string
+  festival_id: string | null
+  recipient_count: number
+  sent_at: string
+  success: boolean
+  error: string | null
+}
+
+export type EnrichmentJob = {
+  id: string
+  type: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  festival_slug: string | null
+  artist_sort_names: string[] | null
+  fields: string[] | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  result_summary: Record<string, unknown> | null
+  error: string | null
 }

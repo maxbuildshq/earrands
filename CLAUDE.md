@@ -138,10 +138,12 @@ npm run enrich -- --dry-run                       # preview only
 npm run enrich -- --limit=30                      # pace Google quota (100/day free)
 npm run enrich -- --resume                        # continue from saved progress
 npm run enrich -- --fields=bandcamp               # only fetch specific fields
+npm run enrich -- --fields=location               # SC city + country_code only
+npm run enrich -- --fields=bio                    # full bio research (web search + page fetch)
 npm run enrich -- --apply=enrichment-review/X.json  # apply reviewed file to DB
 ```
 
-Pipeline: Brave Search → Discogs (supplementary) → SoundCloud profile scrape → oEmbed validation. Outputs a review JSON at `enrichment-review/<slug>.json` for human verification before DB write. See `scripts/CLAUDE.md` for full details.
+Pipeline: Brave Search → Discogs (supplementary, includes bio profile) → SoundCloud profile scrape (includes city/country_code from hydration JSON) → oEmbed validation → Bio research (when `--fields=bio`: Brave bio search + page fetch). Outputs a review JSON at `enrichment-review/<slug>.json` and bio research chunks at `enrichment-review/<slug>-bio-chunk-XX.json` for human verification before DB write. See `scripts/CLAUDE.md` for full details.
 
 ## Environment
 

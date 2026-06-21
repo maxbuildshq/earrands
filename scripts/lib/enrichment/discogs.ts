@@ -9,6 +9,7 @@ export type DiscogsArtistResult = {
   instagram_url: string | null
   soundcloud_url: string | null
   bandcamp_url: string | null
+  bio: string | null
 }
 
 export async function searchDiscogsArtist(
@@ -65,6 +66,7 @@ async function fetchDiscogsArtist(
     id: number
     images?: Array<{ type: string; uri: string; uri150: string }>
     urls?: string[]
+    profile?: string
   }
 
   const primaryImage = data.images?.find(img => img.type === 'primary')
@@ -87,11 +89,28 @@ async function fetchDiscogsArtist(
     }
   }
 
+  const bio = data.profile ? stripDiscogsMarkup(data.profile) : null
+
   return {
     discogs_id: data.id,
     image_url,
     instagram_url,
     soundcloud_url,
     bandcamp_url,
+    bio,
   }
+}
+
+export function stripDiscogsMarkup(text: string): string {
+  return text
+    .replace(/\[a=([^\]]+)\]/g, '$1')
+    .replace(/\[a(\d+)\]/g, '')
+    .replace(/\[l=([^\]]+)\]/g, '$1')
+    .replace(/\[l(\d+)\]/g, '')
+    .replace(/\[url=([^\]]*)\]([^[]*)\[\/url\]/g, '$2')
+    .replace(/\[b\]([^[]*)\[\/b\]/g, '$1')
+    .replace(/\[i\]([^[]*)\[\/i\]/g, '$1')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }

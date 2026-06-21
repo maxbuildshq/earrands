@@ -1,0 +1,125 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+}
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  })
+}
+
+async function verifyAdmin(req: Request) {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return null
+
+  const supabaseUser = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } },
+  )
+  const { data: { user }, error } = await supabaseUser.auth.getUser()
+  if (error || !user) return null
+  if (user.id !== Deno.env.get('ADMIN_UID')) return null
+  return user
+}
+
+function getServiceClient() {
+  return createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS })
+  }
+
+  const user = await verifyAdmin(req)
+  if (!user) return json({ error: 'Forbidden' }, 403)
+
+  const supabase = getServiceClient()
+  const url = new URL(req.url)
+
+  // GET — stats or list
+  if (req.method === 'GET') {
+    const action = url.searchParams.get('action')
+
+    if (action === 'stats') {
+      const { data: festivals } = await supabase.from('festivals').select('id')
+      if (!festivals) return json([])
+
+      const stats = await Promise.all(festivals.map(async (f) => {
+        const [stages, sets, artists, follows] = await Promise.all([
+          supabase.from('stages').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
+          supabase.from('sets').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
+          supabase.from('sets').select('artist_name').eq('festival_id', f.id),
+          supabase.from('festival_follows').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
+        ])
+        const uniqueArtists = new Set(artists.data?.map(s => s.artist_name) ?? [])
+        return {
+          id: f.id,
+          stages_count: stages.count ?? 0,
+          sets_count: sets.count ?? 0,
+          artists_count: uniqueArtists.size,
+          followers_count: follows.count ?? 0,
+        }
+      }))
+      return json(stats)
+    }
+
+    return json({ error: 'Unknown action' }, 400)
+  }
+
+  // PUT — update festival fields
+  if (req.method === 'PUT') {
+    const body = await req.json()
+    const { id, ...updates } = body
+    if (!id) return json({ error: 'Missing id' }, 400)
+
+    const allowed = ['name', 'slug', 'location', 'start_date', 'end_date', 'timetable_announced', 'published']
+    const filtered: Record<string, unknown> = {}
+    for (const key of allowed) {
+      if (key in updates) filtered[key] = updates[key]
+    }
+
+    const { data, error } = await supabase
+      .from('festivals')
+      .update(filtered)
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) return json({ error: error.message }, 500)
+    return json(data)
+  }
+
+  // PATCH — toggle a single field (published, timetable_announced)
+  if (req.method === 'PATCH') {
+    const body = await req.json()
+    const { id, ...fields } = body
+    if (!id) return json({ error: 'Missing id' }, 400)
+
+    const allowed = ['published', 'timetable_announced']
+    const filtered: Record<string, unknown> = {}
+    for (const key of allowed) {
+      if (key in fields) filtered[key] = fields[key]
+    }
+
+    const { data, error } = await supabase
+      .from('festivals')
+      .update(filtered)
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) return json({ error: error.message }, 500)
+    return json(data)
+  }
+
+  return json({ error: 'Method not allowed' }, 405)
+})
