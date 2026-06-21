@@ -29,7 +29,7 @@ function bcHandle(url: string | null) {
 
 function ImageHover({ src }: { src: string | null }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout>>()
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const imgRef = useRef<HTMLImageElement>(null)
 
   function handleEnter() {
