@@ -39,11 +39,12 @@ Output a JSON file with this structure:
 ### Bio guidelines
 
 - **Tone:** Neutral, music-focused, informative. Not promotional, not Wikipedia-formal. Think independent music magazine.
-- **Length:** 3-5 sentences. Include a bit of story — how they got started, what defines their sound, notable milestones. If needed, break a paragraph to make the text easily readable.
+- **Length:** 3-5 sentences. Include a bit of story — how they got started, what defines their sound, notable milestones. Try to break a paragraph almost always even with a few sentences bio to make the text visually easily readable, try to make it at logically reasonable places.
 - **Content:** Mention genre/style, origin/location if known, notable labels or releases, any distinctive characteristics.
 - **Do not invent facts.** Only use information present in the sources. If sources conflict, use the most commonly cited version and note the discrepancy.
 - **Do not copy text verbatim** from any source. Synthesize and rewrite.
-- **Festival bio handling:** If `festival_bio_flagged` is true, do not use the festival bio as primary source. If the festival bio is good and not flagged, you may keep it as-is (set `bio_source: "festival"` instead of `"generated"`).
+- **Always generate a new bio** from all available sources — treat the festival bio as one input alongside SC description, Discogs profile, and web sources. Festival bios are often too long, promotional, or venue-specific, so always synthesize a fresh version. Always set `bio_source: "generated"`. The admin will decide whether to activate the generated bio or keep the festival original.
+- **Festival bio flagging:** If `festival_bio_flagged` is true, the festival bio contains the festival's own name or venue-specific language — note this in `notes` and do not rely on it as a primary source. Use it only to cross-reference facts available elsewhere.
 - **When sources are insufficient:** Set `bio` to null, `confidence` to "low", and explain in `notes` what's missing.
 - **Source tracking:** Include in `bio_sources` only the URLs you actually used for the bio. This is for provenance tracking.
 

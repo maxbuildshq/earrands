@@ -83,7 +83,12 @@ export function writeBioResearchFiles(festival: string | null, results: Enrichme
   const slug = festival ?? 'all'
 
   const artistsWithResearch = results
-    .filter(r => r.bio_research && r.bio_research.web_sources.length > 0)
+    .filter(r => r.bio_research && (
+      r.bio_research.web_sources.length > 0 ||
+      r.bio_research.soundcloud_bio ||
+      r.bio_research.discogs_bio ||
+      r.bio_research.festival_bio
+    ))
     .map(r => ({
       sort_name: r.sort_name,
       display_name: r.display_name,

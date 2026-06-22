@@ -128,36 +128,63 @@ Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram
 
 1. **Brave Search** → find SoundCloud profile URL (`"<name>" dj music site:soundcloud.com`)
 2. **Brave Search** → (if IG still missing) find Instagram (`"<name>" dj music site:instagram.com`)
-3. **Discogs** → supplementary image, Bandcamp URL, SC/IG fallback, bio (profile text)
-4. **SoundCloud profile scrape** → extract image, Instagram cross-ref, city/country_code from hydration JSON, description as raw bio
-5. **SoundCloud oEmbed** → validate embed URL
-6. **Bio research** (when `--fields=bio`) → Brave Search for biography pages, fetch top result pages, bundle with SC/Discogs/festival bios into research file
+3. **Discogs** → supplementary image candidates (up to 5), Bandcamp URL, SC/IG fallback, bio profile text
+4. **SoundCloud profile scrape** → image candidate, Instagram cross-ref, city/country_code from hydration JSON, SC description as bio fragment
+5. **Bandcamp location fallback** → if SC location missing and Bandcamp URL found, scrape location from Bandcamp page
+6. **Image scoring** (when Cloudflare credentials available) → Cloudflare DETR person detection across all image candidates; picks best person photo
+7. **Instagram resolution** → multi-source cross-reference: SC profile link (most authoritative) → Discogs → Brave Search; conflicts flagged in review notes
+8. **SoundCloud oEmbed** → validate embed URL
+9. **Bio research** (when `--fields=bio`) → Brave Search for biography pages (5 query exclusions in-query; full 24-domain exclusion list client-side), fetch up to 5 pages with content relevance check, bundle with SC/Discogs/festival bios into `bio_research` JSONB
+10. **AI bio generation** (when `--fields=bio`, after apply) → calls `claude -p --model claude-sonnet-4-6 --thinking-budget-tokens 1024` per artist; writes result directly to `artists.bio_generated` in DB
 
 Skips combo/temporary artist entries (B2B placeholders with `is_collective: false` + `&`/`b2b`/`vs` in sort_name).
 
 ### Rate limits
 
-Brave Search: **2,000 queries/month** free tier (no credit card required). Discogs: 60 req/min. SoundCloud scrape/oEmbed: throttled to ~1 req/sec. Google Custom Search kept as fallback (`google-search.ts`) but unused by default. Bio research uses 1 additional Brave query per artist.
+Brave Search: **2,000 queries/month** free tier. Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. Bio research: 1 Brave query per artist (counts against monthly quota).
 
-### Review workflow
+### Enrichment workflow
 
-1. `npm run enrich -- --festival=<slug>` → writes `enrichment-review/<slug>.json`
-2. Human reviews/edits the JSON (fix wrong matches, remove false positives)
-3. `npm run enrich -- --apply=enrichment-review/<slug>.json` → writes to DB
+```bash
+# Standard enrichment (all fields)
+npm run enrich -- --festival=<slug>
 
-### Bio generation workflow
+# Bio research + AI generation in one pass
+npm run enrich -- --festival=<slug> --fields=bio
 
-1. `npm run enrich -- --festival=<slug> --fields=bio` → writes bio research chunks to `enrichment-review/<slug>-bio-chunk-XX.json`
-2. Feed each chunk to Claude Code (Sonnet, low thinking) using the prompt in `scripts/prompts/generate-bios.md`
-3. Claude generates bios → outputs review JSON
-4. Human reviews generated bios
-5. Apply with `--apply`
+# Single artist (testing)
+npm run enrich -- --artist="Speedy J" --fields=bio
 
-Research files are never deleted — re-run with improved prompts anytime.
+# Apply reviewed JSON to DB (manual review mode)
+npm run enrich -- --apply=enrichment-review/<slug>.json
+
+# Run via admin background jobs (poll-jobs picks up jobs created in admin UI)
+npm run enrich -- --poll-jobs
+```
+
+`--auto-apply` (used internally by `--poll-jobs`) skips interactive confirm and applies directly to DB.
+
+### Bio generation
+
+Bio research and AI generation run together when `--fields=bio` is used — no separate step needed.
+
+**Research phase**: gathers `bio_research` JSONB with:
+- `soundcloud_bio` — SC profile description
+- `discogs_bio` — Discogs profile text (markup stripped)
+- `festival_bio` — bio from ingest; `festival_bio_flagged: true` if it contains the festival brand name
+- `web_sources[]` — up to 5 web pages with title, snippet, full content (5000 chars each)
+
+**Generation phase**: after research is written to DB, `bio-generator.ts` calls the `claude` CLI (Sonnet, low thinking) with a constructed prompt and writes the result to `artists.bio_generated`.
+
+**Admin review**: admin compares Active Bio / Festival Bio / Generated Bio on the artist detail page and activates the preferred version. Festival bios flagged as containing the festival name show a warning in the UI — admin should not activate these cross-festival.
+
+**Sources stored separately**:
+- `bio_research` (JSONB) — full structured research data (AI generation input)
+- `bio_sources` (JSONB array) — flat provenance list derived from `bio_research` at apply time (admin display)
 
 ### Festival bio flagging
 
-During ingest, bios are checked for the festival's root brand name (e.g., "Awakenings" from "Awakenings Upclose 2026"). Matches are flagged with a SQL comment in the generated migration, and `bio_source` is set to `festival:<slug>`.
+At ingest time: bios containing the festival brand name are flagged with a SQL comment. During enrichment: when `--festival` is provided, `festival_bio_flagged` is computed using the same `bioContainsFestivalName()` helper. The flag is stored in `bio_research.festival_bio_flagged` and surfaced as a warning in the admin bio comparison UI.
 
 ### Env vars needed
 
@@ -172,18 +199,23 @@ CLOUDFLARE_API_TOKEN=...     # Cloudflare API token with Workers AI read permiss
 # GOOGLE_CSE_ID=...          # Custom Search Engine ID
 ```
 
+No Anthropic API key needed — bio generation uses the local `claude` CLI (your Claude subscription).
+
 ### File structure
 
 ```
 scripts/lib/enrichment/
-  types.ts          # EnrichmentResult, ReviewFile, BioResearchFile, ArtistRow
-  pipeline.ts       # orchestration per artist (source-agnostic)
-  brave-search.ts   # Brave Search API wrapper (primary web search + bio research)
-  google-search.ts  # Google Custom Search API wrapper (fallback, unused by default)
-  soundcloud.ts     # profile scraping + oEmbed + location + bio extraction
-  discogs.ts        # search + images + URLs + bio profile (supplementary)
-  name-utils.ts     # query construction, URL parsing, combo detection
-  review.ts         # JSON review file generation + bio research chunks + apply + resume
+  types.ts            # EnrichmentResult, BioResearch, BioSource, ArtistRow, etc.
+  pipeline.ts         # orchestration per artist
+  brave-search.ts     # Brave Search API (SC/IG search + bio research web search)
+  google-search.ts    # Google Custom Search fallback (unused by default)
+  soundcloud.ts       # profile scraping + oEmbed + location + bio extraction
+  discogs.ts          # search + all_images + URLs + bio profile
+  bandcamp.ts         # location scraping from Bandcamp pages
+  image-scorer.ts     # Cloudflare DETR person detection for image candidate selection
+  bio-generator.ts    # Claude CLI call for AI bio generation (Sonnet, low thinking)
+  name-utils.ts       # query construction, URL parsing, combo detection
+  review.ts           # review file + bio research chunks + apply + resume
 scripts/prompts/
-  generate-bios.md  # prompt template for Claude Code bio generation
+  generate-bios.md    # bio generation guidelines (reference — actual prompt built in bio-generator.ts)
 ```

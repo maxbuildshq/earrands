@@ -7,7 +7,7 @@ import { Label } from '../../components/ui/Label'
 import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBadge'
 import { SourceLabel } from '../../components/admin/SourceLabel'
 import { useAdminArtist, useUpdateArtist, useUpdateAndRefetch, useActivateBio } from '../../hooks/useAdminArtists'
-import { useCreateJob } from '../../hooks/useAdminJobs'
+import { useCreateJob, useAdminJobs } from '../../hooks/useAdminJobs'
 import type { Artist } from '../../types/database'
 
 function ExternalLink({ href, label }: { href: string | null; label: string }) {
@@ -48,6 +48,7 @@ export default function AdminArtistDetail() {
   const updateAndRefetch = useUpdateAndRefetch()
   const activateBio = useActivateBio()
   const createJob = useCreateJob()
+  useAdminJobs()
 
   useEffect(() => {
     if (artist) {
@@ -165,7 +166,7 @@ export default function AdminArtistDetail() {
             onClick={() => createJob.mutate({ type: 'enrich', artist_sort_names: [artist.sort_name], fields: ['bio'] })}
             disabled={createJob.isPending}
           >
-            Bio Research
+            Bio + AI
           </Button>
         </div>
       </div>
@@ -268,6 +269,7 @@ export default function AdminArtistDetail() {
             content={artist.bio_festival}
             onActivate={artist.bio_festival ? () => activateBio.mutate({ artistId: artist.id, source: 'festival' }) : undefined}
             isActive={artist.bio_source === 'festival'}
+            warning={artist.bio_research?.festival_bio_flagged ? 'Contains festival name — may not be suitable for cross-festival use' : undefined}
           />
           <BioCard
             title="Generated Bio"
@@ -309,11 +311,13 @@ function BioCard({
   content,
   onActivate,
   isActive,
+  warning,
 }: {
   title: string
   content: string | null
   onActivate?: () => void
   isActive?: boolean
+  warning?: string
 }) {
   return (
     <div className={`border p-4 space-y-2 ${isActive ? 'border-accent' : 'border-border'}`}>
@@ -325,8 +329,11 @@ function BioCard({
           </Button>
         )}
       </div>
+      {warning && (
+        <p className="font-mono text-xs text-negative">{warning}</p>
+      )}
       {content ? (
-        <p className="font-mono text-xs text-text-primary leading-relaxed max-h-40 overflow-y-auto">
+        <p className="font-mono text-xs text-text-primary leading-relaxed max-h-40 overflow-y-auto whitespace-pre-line">
           {content}
         </p>
       ) : (

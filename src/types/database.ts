@@ -84,6 +84,7 @@ export type Artist = {
   bio_festival: string | null
   bio_sources: Array<{ url: string; title: string; snippet: string; type: string }> | null
   bio_generated: string | null
+  bio_research: { festival_bio_flagged?: boolean } | null
   enrichment_status: string | null
   created_at: string
 }

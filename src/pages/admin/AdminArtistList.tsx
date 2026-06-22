@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Heading } from '../../components/ui/Heading'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
@@ -7,7 +7,7 @@ import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBa
 import { SourceLabel } from '../../components/admin/SourceLabel'
 import { useAdminArtists, useBulkUpdateArtists, useUpdateArtist, useUpdateAndRefetch, useActivateBio } from '../../hooks/useAdminArtists'
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
-import { useCreateJob } from '../../hooks/useAdminJobs'
+import { useCreateJob, useAdminJobs } from '../../hooks/useAdminJobs'
 
 const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed'] as const
 const PAGE_SIZES = [50, 100, 200] as const
@@ -70,34 +70,46 @@ type ArtistRow = {
   bio_festival: string | null
   bio_generated: string | null
   bio_source: string | null
+  bio_research: { festival_bio_flagged?: boolean } | null
   city: string | null
   country_code: string | null
   enrichment_status: string
   enriched_at: string | null
 }
 
-function BioHover({ artist }: { artist: ArtistRow }) {
+function BioPopover({ artist }: { artist: ArtistRow }) {
   const [show, setShow] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
   const activateBio = useActivateBio()
+
+  useEffect(() => {
+    if (!show) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [show])
 
   if (!artist.bio && !artist.bio_festival && !artist.bio_generated) {
     return <span className="text-border">—</span>
   }
 
-  const sources: { label: string; content: string | null; sourceKey: string }[] = [
+  const festivalFlagged = !!artist.bio_research?.festival_bio_flagged
+  const sources: { label: string; content: string | null; sourceKey: string; warning?: string }[] = [
     { label: 'Active', content: artist.bio, sourceKey: artist.bio_source ?? '' },
-    { label: 'Festival', content: artist.bio_festival, sourceKey: 'festival' },
+    { label: 'Festival', content: artist.bio_festival, sourceKey: 'festival', warning: festivalFlagged ? 'Contains festival name' : undefined },
     { label: 'Generated', content: artist.bio_generated, sourceKey: 'generated' },
   ].filter(s => s.content)
 
   return (
-    <div className="relative" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-      <span className="text-accent cursor-pointer">
+    <div className="relative" ref={ref}>
+      <button className="text-accent cursor-pointer text-left" onClick={() => setShow(!show)}>
         Yes
         {artist.bio_source && <SourceLabel source={artist.bio_source} />}
-      </span>
+      </button>
       {show && sources.length > 0 && (
-        <div className="absolute z-50 right-0 top-6 w-80 border border-border bg-surface shadow-lg p-3 space-y-2">
+        <div className="absolute z-50 right-0 top-6 w-[480px] border border-border bg-surface shadow-lg p-3 space-y-3">
           {sources.map(s => (
             <div key={s.label} className="space-y-1">
               <div className="flex items-center justify-between">
@@ -119,8 +131,11 @@ function BioHover({ artist }: { artist: ArtistRow }) {
                   </button>
                 )}
               </div>
-              <p className="font-mono text-xs text-text-primary leading-relaxed max-h-24 overflow-y-auto">
-                {s.content!.slice(0, 300)}{s.content!.length > 300 ? '…' : ''}
+              {s.warning && (
+                <p className="font-mono text-xs text-negative">{s.warning}</p>
+              )}
+              <p className="font-mono text-xs text-text-primary leading-relaxed max-h-48 overflow-y-auto whitespace-pre-line">
+                {s.content}
               </p>
             </div>
           ))}
@@ -195,14 +210,36 @@ function InlineEdit({
 }
 
 export default function AdminArtistList() {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string>('all')
-  const [festivalId, setFestivalId] = useState<string>('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') ?? ''
+  const status = searchParams.get('status') ?? 'all'
+  const festivalId = searchParams.get('festival') ?? ''
+  const page = parseInt(searchParams.get('page') ?? '0', 10)
+  const pageSize = parseInt(searchParams.get('size') ?? '50', 10)
+
+  const setFilter = useCallback((key: string, value: string, resetPage = true) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (value && value !== 'all' && value !== '0' && value !== '50') {
+        next.set(key, value)
+      } else {
+        next.delete(key)
+      }
+      if (resetPage && key !== 'page') next.delete('page')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setSearch = (v: string) => setFilter('q', v)
+  const setStatus = (v: string) => setFilter('status', v)
+  const setFestivalId = (v: string) => setFilter('festival', v)
+  const setPage = (v: number) => setFilter('page', String(v), false)
+  const setPageSize = (v: number) => setFilter('size', String(v))
+
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [pageSize, setPageSize] = useState<number>(50)
-  const [page, setPage] = useState(0)
 
   const { data: festivals = [] } = useAdminFestivals()
+  useAdminJobs() // polls jobs — auto-refreshes artist data when jobs complete
   const { data: result, isLoading } = useAdminArtists({
     search: search || undefined,
     status: status !== 'all' ? status : undefined,
@@ -229,11 +266,22 @@ export default function AdminArtistList() {
     else setSelected(new Set(artists.map(a => a.id)))
   }
 
-  function toggleOne(id: string) {
+  const lastChecked = useRef<number | null>(null)
+
+  function toggleOne(id: string, index: number, shiftKey: boolean) {
     setSelected(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (shiftKey && lastChecked.current !== null && lastChecked.current !== index) {
+        const from = Math.min(lastChecked.current, index)
+        const to = Math.max(lastChecked.current, index)
+        for (let i = from; i <= to; i++) {
+          next.add(artists[i].id)
+        }
+      } else {
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+      }
+      lastChecked.current = index
       return next
     })
   }
@@ -279,7 +327,6 @@ export default function AdminArtistList() {
 
   function handlePageSizeChange(newSize: number) {
     setPageSize(newSize)
-    setPage(0)
   }
 
   return (
@@ -289,7 +336,7 @@ export default function AdminArtistList() {
       {/* Filters */}
       <div className="flex items-end gap-3 flex-wrap">
         <div className="flex-1 max-w-xs">
-          <Input placeholder="Search artists..." value={search} onChange={e => { setSearch(e.target.value); setPage(0) }} />
+          <Input placeholder="Search artists..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <div className="flex gap-0.5">
           {STATUS_OPTIONS.map(s => (
@@ -299,7 +346,7 @@ export default function AdminArtistList() {
               active={status === s}
               fullWidth={false}
               className="px-3 py-1.5"
-              onClick={() => { setStatus(s); setPage(0) }}
+              onClick={() => setStatus(s)}
             >
               {s}
             </Button>
@@ -307,7 +354,7 @@ export default function AdminArtistList() {
         </div>
         <select
           value={festivalId}
-          onChange={e => { setFestivalId(e.target.value); setPage(0) }}
+          onChange={e => setFestivalId(e.target.value)}
           className="bg-surface border border-border text-text-primary font-mono text-sm px-3 py-2 uppercase tracking-wider"
         >
           <option value="">All festivals</option>
@@ -328,7 +375,7 @@ export default function AdminArtistList() {
           Enrich
         </Button>
         <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={handleBulkBioResearch} disabled={selected.size === 0 || createJob.isPending}>
-          Bio research
+          Bio + AI
         </Button>
         {selected.size > 0 && (
           <button className="text-text-secondary hover:text-accent text-xs uppercase tracking-wider" onClick={() => setSelected(new Set())}>
@@ -374,10 +421,10 @@ export default function AdminArtistList() {
             ) : artists.length === 0 ? (
               <tr><td colSpan={10} className="px-4 py-8 text-center text-text-secondary">No artists found.</td></tr>
             ) : (
-              artists.map(a => (
+              artists.map((a, i) => (
                 <tr key={a.id} className="border-b border-border last:border-b-0 hover:bg-surface-raised transition-colors">
                   <td className="px-3 py-3">
-                    <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleOne(a.id)} className="accent-accent" />
+                    <input type="checkbox" checked={selected.has(a.id)} onClick={e => toggleOne(a.id, i, e.shiftKey)} onChange={() => {}} className="accent-accent" />
                   </td>
                   <td className="px-2 py-3">
                     <ImageHover src={a.image_url} />
@@ -418,7 +465,7 @@ export default function AdminArtistList() {
                     />
                   </td>
                   <td className="px-3 py-3">
-                    <BioHover artist={a} />
+                    <BioPopover artist={a} />
                   </td>
                   <td className="px-3 py-3">
                     <EnrichmentStatusBadge status={a.enrichment_status} />
@@ -455,10 +502,10 @@ export default function AdminArtistList() {
             <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(0)} disabled={page === 0}>
               ««
             </Button>
-            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(p => p - 1)} disabled={page === 0}>
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(page - 1)} disabled={page === 0}>
               «
             </Button>
-            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
               »
             </Button>
             <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>

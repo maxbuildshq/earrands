@@ -43,7 +43,6 @@ export type EnrichmentResult = {
   bio: string | null
   bio_source: string | null
   bio_festival: string | null
-  bio_sources: BioSource[] | null
   bio_research: BioResearch | null
   confidence: Confidence
   sources: string[]

@@ -1,10 +1,16 @@
 import { searchSoundCloud, searchInstagram, searchArtistBio } from './brave-search.js'
 import { scrapeSoundCloudProfile, validateWithOEmbed } from './soundcloud.js'
 import { searchDiscogsArtist } from './discogs.js'
+import { scrapeBandcampProfile } from './bandcamp.js'
 import { isComboEntry, extractInstagramHandle } from './name-utils.js'
+import { extractFestivalRootName, bioContainsFestivalName } from '../ingest-diff.js'
 import { sleep } from '../../scrapers/base.js'
 import { scoreImageCandidates } from './image-scorer.js'
-import type { EnrichmentField, EnrichmentResult, ArtistRow, Confidence, BioResearch, BioSource } from './types.js'
+import type { EnrichmentField, EnrichmentResult, ArtistRow, Confidence, BioResearch } from './types.js'
+
+function normalizeBandcampUrl(url: string): string {
+  return url.replace('://www.', '://')
+}
 
 export type PipelineConfig = {
   braveApiKey?: string
@@ -12,6 +18,7 @@ export type PipelineConfig = {
   discogsSecret?: string
   cloudflareAccountId?: string
   cloudflareApiToken?: string
+  festivalName?: string
   fields?: EnrichmentField[]
   dryRun?: boolean
   onProgress?: (artist: string, step: string) => void
@@ -57,194 +64,193 @@ export async function enrichArtist(
   const { braveApiKey, discogsKey, discogsSecret, fields } = config
   const hasBrave = !!braveApiKey
   const hasDiscogs = !!(discogsKey && discogsSecret)
+  const bioOnly = fields?.length === 1 && fields[0] === 'bio'
   const instagramCandidates: InstagramCandidate[] = []
   const imageCandidates: Array<{ url: string; source: string }> = []
   let scBio: string | null = null
   let discogsBio: string | null = null
 
-  // Track which URLs were already verified (in DB before this run)
-  // Location and bio should only be extracted from verified profiles
-  const verifiedScUrl = artist.soundcloud_url
   const verifiedDiscogsId = artist.discogs_id
 
-  // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
-  if (hasBrave && needsField(fields, 'soundcloud') && !result.soundcloud_url) {
-    config.onProgress?.(artist.name, 'Brave → SoundCloud')
-    try {
-      const scUrl = await searchSoundCloud(artist.name, braveApiKey!)
-      if (scUrl) {
-        result.soundcloud_url = scUrl
-        result.sources.push('brave-search-sc')
-      }
-    } catch (err: any) {
-      if (err.message?.includes('rate limit')) throw err
-      result.review_notes.push(`Brave SC search failed: ${err.message}`)
-    }
-    await sleep(300)
-  }
-
-  // ── Step 2: Find Instagram via Brave ───────────────────────────────────
-  if (hasBrave && needsField(fields, 'instagram') && !result.instagram_url) {
-    config.onProgress?.(artist.name, 'Brave → Instagram')
-    try {
-      const igUrl = await searchInstagram(artist.name, braveApiKey!)
-      if (igUrl) {
-        instagramCandidates.push({ url: igUrl, source: 'brave-search-ig' })
-      }
-    } catch (err: any) {
-      if (err.message?.includes('rate limit')) throw err
-      result.review_notes.push(`Brave IG search failed: ${err.message}`)
-    }
-    await sleep(300)
-  }
-
-  // ── Step 3: Discogs (supplementary: image, Bandcamp, SC/IG fallback) ────
-  if (hasDiscogs) {
-    const needsDiscogs = needsField(fields, 'image') ||
-                         (needsField(fields, 'bandcamp') && !result.bandcamp_url) ||
-                         (needsField(fields, 'soundcloud') && !result.soundcloud_url) ||
-                         needsField(fields, 'instagram')
-
-    if (needsDiscogs || needsField(fields, 'bio')) {
-      config.onProgress?.(artist.name, 'Searching Discogs')
+  if (!bioOnly) {
+    // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
+    if (hasBrave && needsField(fields, 'soundcloud') && !result.soundcloud_url) {
+      config.onProgress?.(artist.name, 'Brave → SoundCloud')
       try {
-        const discogs = await searchDiscogsArtist(artist.name, discogsKey!, discogsSecret!)
-        if (discogs) {
-          result.discogs_id = discogs.discogs_id
-          if (discogs.image_url) {
-            imageCandidates.push({ url: discogs.image_url, source: 'discogs-image' })
-          }
-          if (!result.bandcamp_url && discogs.bandcamp_url) {
-            result.bandcamp_url = discogs.bandcamp_url
-            result.sources.push('discogs-bandcamp')
-          }
-          if (!result.soundcloud_url && discogs.soundcloud_url) {
-            result.soundcloud_url = discogs.soundcloud_url
-            result.sources.push('discogs-soundcloud')
-          }
-          if (discogs.instagram_url) {
-            instagramCandidates.push({ url: discogs.instagram_url, source: 'discogs-instagram' })
-          }
-          if (discogs.bio && verifiedDiscogsId) {
-            discogsBio = discogs.bio
-          }
+        const scUrl = await searchSoundCloud(artist.name, braveApiKey!)
+        if (scUrl) {
+          result.soundcloud_url = scUrl
+          result.sources.push('brave-search-sc')
         }
       } catch (err: any) {
         if (err.message?.includes('rate limit')) throw err
-        result.review_notes.push(`Discogs search failed: ${err.message}`)
+        result.review_notes.push(`Brave SC search failed: ${err.message}`)
       }
-      await sleep(500)
+      await sleep(300)
     }
-  }
 
-  // ── Step 4: Scrape SoundCloud profile ───────────────────────────────────
-  if (result.soundcloud_url) {
-    const needsScrape = needsField(fields, 'image') ||
-                        needsField(fields, 'instagram') ||
-                        (needsField(fields, 'soundcloud') && !result.soundcloud_embed_url) ||
-                        (needsField(fields, 'bandcamp') && !result.bandcamp_url)
-
-    const isVerifiedSc = !!verifiedScUrl
-    const needsLocation = needsField(fields, 'location') && !result.city && isVerifiedSc
-    const needsBioFragments = needsField(fields, 'bio') && isVerifiedSc
-
-    if (needsScrape || needsLocation || needsBioFragments) {
-      config.onProgress?.(artist.name, 'Scraping SoundCloud profile')
-      const profile = await scrapeSoundCloudProfile(result.soundcloud_url)
-      if (profile) {
-        if (profile.image_url) {
-          imageCandidates.push({ url: profile.image_url, source: 'soundcloud-image' })
-        }
-        if (profile.instagram_url) {
-          instagramCandidates.push({ url: profile.instagram_url, source: 'soundcloud-instagram' })
-        }
-        if (!result.bandcamp_url && profile.bandcamp_url) {
-          result.bandcamp_url = profile.bandcamp_url
-          result.sources.push('soundcloud-bandcamp')
-        }
-        if (!result.soundcloud_embed_url) {
-          result.soundcloud_embed_url = result.soundcloud_url
-          result.sources.push('soundcloud-embed')
-        }
-        if (needsLocation && profile.city) {
-          result.city = profile.city
-          result.country_code = profile.country_code
-          result.sources.push('soundcloud-location')
-        }
-        if (needsBioFragments && profile.bio) {
-          scBio = profile.bio
-        }
-      }
-      await sleep(500)
-    }
-  }
-
-  // Note unverified SC URL when location/bio was requested but skipped
-  if (result.soundcloud_url && !verifiedScUrl) {
-    if (needsField(fields, 'location') && !result.city) {
-      result.review_notes.push('Location skipped: SoundCloud URL not yet verified — run --apply first, then re-enrich with --fields=location')
-    }
-    if (needsField(fields, 'bio')) {
-      result.review_notes.push('SC bio skipped: SoundCloud URL not yet verified — run --apply first, then re-enrich with --fields=bio')
-    }
-  }
-
-  // ── Step 4b: Score image candidates and pick best ──────────────────────
-  if (needsField(fields, 'image') && imageCandidates.length > 0) {
-    const cfAccountId = config.cloudflareAccountId
-    const cfApiToken = config.cloudflareApiToken
-
-    if (cfAccountId && cfApiToken && imageCandidates.length > 1) {
-      config.onProgress?.(artist.name, 'Scoring images')
+    // ── Step 2: Find Instagram via Brave ───────────────────────────────────
+    if (hasBrave && needsField(fields, 'instagram') && !result.instagram_url) {
+      config.onProgress?.(artist.name, 'Brave → Instagram')
       try {
-        const scored = await scoreImageCandidates(imageCandidates, {
-          accountId: cfAccountId,
-          apiToken: cfApiToken,
-          dryRun: config.dryRun,
-        })
-        result.image_candidates = scored
-        const best = scored.reduce((a, b) => b.score > a.score ? b : a)
-        result.image_url = best.url
-        result.sources.push(best.source)
+        const igUrl = await searchInstagram(artist.name, braveApiKey!)
+        if (igUrl) {
+          instagramCandidates.push({ url: igUrl, source: 'brave-search-ig' })
+        }
       } catch (err: any) {
-        result.review_notes.push(`Image scoring failed, using priority fallback: ${err.message}`)
+        if (err.message?.includes('rate limit')) throw err
+        result.review_notes.push(`Brave IG search failed: ${err.message}`)
+      }
+      await sleep(300)
+    }
+
+    // ── Step 3: Discogs (supplementary: image, Bandcamp, SC/IG fallback) ────
+    if (hasDiscogs) {
+      const needsDiscogs = needsField(fields, 'image') ||
+                           (needsField(fields, 'bandcamp') && !result.bandcamp_url) ||
+                           (needsField(fields, 'soundcloud') && !result.soundcloud_url) ||
+                           needsField(fields, 'instagram')
+
+      if (needsDiscogs) {
+        config.onProgress?.(artist.name, 'Searching Discogs')
+        try {
+          const discogs = await searchDiscogsArtist(artist.name, discogsKey!, discogsSecret!)
+          if (discogs) {
+            result.discogs_id = discogs.discogs_id
+            for (let i = 0; i < discogs.all_images.length; i++) {
+              imageCandidates.push({ url: discogs.all_images[i], source: i === 0 ? 'discogs-image' : `discogs-image-${i + 1}` })
+            }
+            if (!result.bandcamp_url && discogs.bandcamp_url) {
+              result.bandcamp_url = normalizeBandcampUrl(discogs.bandcamp_url)
+              result.sources.push('discogs-bandcamp')
+            }
+            if (!result.soundcloud_url && discogs.soundcloud_url) {
+              result.soundcloud_url = discogs.soundcloud_url
+              result.sources.push('discogs-soundcloud')
+            }
+            if (discogs.instagram_url) {
+              instagramCandidates.push({ url: discogs.instagram_url, source: 'discogs-instagram' })
+            }
+            if (discogs.bio && verifiedDiscogsId) {
+              discogsBio = discogs.bio
+            }
+          }
+        } catch (err: any) {
+          if (err.message?.includes('rate limit')) throw err
+          result.review_notes.push(`Discogs search failed: ${err.message}`)
+        }
+        await sleep(500)
+      }
+    }
+
+    // ── Step 4: Scrape SoundCloud profile ───────────────────────────────────
+    if (result.soundcloud_url) {
+      const needsScrape = needsField(fields, 'image') ||
+                          needsField(fields, 'instagram') ||
+                          (needsField(fields, 'soundcloud') && !result.soundcloud_embed_url) ||
+                          (needsField(fields, 'bandcamp') && !result.bandcamp_url)
+
+      const needsLocation = needsField(fields, 'location') && !result.city
+
+      if (needsScrape || needsLocation) {
+        config.onProgress?.(artist.name, 'Scraping SoundCloud profile')
+        const profile = await scrapeSoundCloudProfile(result.soundcloud_url)
+        if (profile) {
+          if (profile.image_url) {
+            imageCandidates.push({ url: profile.image_url, source: 'soundcloud-image' })
+          }
+          if (profile.instagram_url) {
+            instagramCandidates.push({ url: profile.instagram_url, source: 'soundcloud-instagram' })
+          }
+          if (!result.bandcamp_url && profile.bandcamp_url) {
+            result.bandcamp_url = normalizeBandcampUrl(profile.bandcamp_url)
+            result.sources.push('soundcloud-bandcamp')
+          }
+          if (!result.soundcloud_embed_url) {
+            result.soundcloud_embed_url = result.soundcloud_url
+            result.sources.push('soundcloud-embed')
+          }
+          if (needsLocation && profile.city) {
+            result.city = profile.city
+            result.country_code = profile.country_code
+            result.sources.push('soundcloud-location')
+          }
+          if (profile.bio) {
+            scBio = profile.bio
+          }
+        }
+        await sleep(500)
+      }
+    }
+
+    // ── Bandcamp location fallback ─────────────────────────────────────────
+    if (needsField(fields, 'location') && !result.city && result.bandcamp_url) {
+      config.onProgress?.(artist.name, 'Scraping Bandcamp location')
+      const bc = await scrapeBandcampProfile(result.bandcamp_url)
+      if (bc && (bc.city || bc.country_code)) {
+        result.city = bc.city
+        result.country_code = bc.country_code
+        result.sources.push('bandcamp-location')
+      }
+    }
+
+    // ── Score image candidates and pick best ────────────────────────────────
+    if (needsField(fields, 'image') && imageCandidates.length > 0) {
+      const cfAccountId = config.cloudflareAccountId
+      const cfApiToken = config.cloudflareApiToken
+
+      if (cfAccountId && cfApiToken && imageCandidates.length > 1) {
+        config.onProgress?.(artist.name, 'Scoring images')
+        try {
+          const scored = await scoreImageCandidates(imageCandidates, {
+            accountId: cfAccountId,
+            apiToken: cfApiToken,
+            dryRun: config.dryRun,
+          })
+          result.image_candidates = scored
+          const best = scored.reduce((a, b) => b.score > a.score ? b : a)
+          result.image_url = best.url
+          result.sources.push(best.source)
+        } catch (err: any) {
+          result.review_notes.push(`Image scoring failed, using priority fallback: ${err.message}`)
+          const fallback = imageCandidates[0]
+          result.image_url = fallback.url
+          result.sources.push(fallback.source)
+        }
+      } else {
         const fallback = imageCandidates[0]
         result.image_url = fallback.url
         result.sources.push(fallback.source)
       }
-    } else {
-      // No CF credentials or only one candidate — use priority order (Discogs first)
-      const fallback = imageCandidates[0]
-      result.image_url = fallback.url
-      result.sources.push(fallback.source)
+    }
+
+    // ── Resolve Instagram from candidates ───────────────────────────────────
+    if (needsField(fields, 'instagram') && !result.instagram_url) {
+      const resolved = resolveInstagram(instagramCandidates, result.review_notes)
+      if (resolved) {
+        result.instagram_url = resolved.url
+        result.sources.push(resolved.source)
+      }
+    }
+
+    // ── Validate SoundCloud embed ───────────────────────────────────────────
+    if (result.soundcloud_embed_url) {
+      config.onProgress?.(artist.name, 'Validating SC embed')
+      const oembed = await validateWithOEmbed(result.soundcloud_embed_url)
+      if (!oembed) {
+        result.review_notes.push(`SoundCloud embed URL failed validation: ${result.soundcloud_embed_url}`)
+        result.soundcloud_embed_url = null
+      }
     }
   }
 
-  // ── Step 4c: Resolve Instagram from candidates ─────────────────────────
-  if (needsField(fields, 'instagram') && !result.instagram_url) {
-    const resolved = resolveInstagram(instagramCandidates, result.review_notes)
-    if (resolved) {
-      result.instagram_url = resolved.url
-      result.sources.push(resolved.source)
-    }
-  }
-
-  // ── Step 5: Validate SoundCloud embed ───────────────────────────────────
-  if (result.soundcloud_embed_url) {
-    config.onProgress?.(artist.name, 'Validating SC embed')
-    const oembed = await validateWithOEmbed(result.soundcloud_embed_url)
-    if (!oembed) {
-      result.review_notes.push(`SoundCloud embed URL failed validation: ${result.soundcloud_embed_url}`)
-      result.soundcloud_embed_url = null
-    }
-  }
-
-  // ── Step 6: Bio research ────────────────────────────────────────────────
+  // ── Bio research ──────────────────────────────────────────────────────────
   if (needsField(fields, 'bio') && hasBrave) {
     config.onProgress?.(artist.name, 'Bio research')
 
     const festivalBio = artist.bio ?? null
-    const festivalBioFlagged = false // flagging happens at ingest time, not enrichment
+    const festivalRoot = config.festivalName ? extractFestivalRootName(config.festivalName) : null
+    const festivalBioFlagged = !!(festivalBio && festivalRoot && bioContainsFestivalName(festivalBio, festivalRoot))
 
     const bioResearch: BioResearch = {
       soundcloud_bio: scBio,
@@ -264,13 +270,6 @@ export async function enrichArtist(
     }
 
     result.bio_research = bioResearch
-
-    const allSources: BioSource[] = []
-    if (scBio) allSources.push({ url: result.soundcloud_url!, title: 'SoundCloud', snippet: scBio.slice(0, 200), type: 'soundcloud' })
-    if (discogsBio) allSources.push({ url: `https://www.discogs.com/artist/${result.discogs_id}`, title: 'Discogs', snippet: discogsBio.slice(0, 200), type: 'discogs' })
-    if (festivalBio) allSources.push({ url: '', title: 'Festival', snippet: festivalBio.slice(0, 200), type: 'festival' })
-    allSources.push(...bioResearch.web_sources)
-    result.bio_sources = allSources
     result.sources.push('bio-research')
   }
 

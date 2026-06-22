@@ -105,7 +105,30 @@ Deno.serve(async (req) => {
       return json(data)
     }
 
+    // Mark a running job as completed (data already in DB, process died before updating status)
+    if (action === 'mark_done') {
+      const { data, error } = await supabase
+        .from('enrichment_jobs')
+        .update({ status: 'completed', completed_at: new Date().toISOString(), result_summary: { message: 'Marked done by admin' } })
+        .eq('id', id)
+        .eq('status', 'running')
+        .select()
+        .single()
+      if (error) return json({ error: error.message }, 500)
+      return json(data)
+    }
+
     return json({ error: 'Unknown action' }, 400)
+  }
+
+  // DELETE — remove a job row
+  if (req.method === 'DELETE') {
+    const body = await req.json()
+    const { id } = body
+    if (!id) return json({ error: 'Missing id' }, 400)
+    const { error } = await supabase.from('enrichment_jobs').delete().eq('id', id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
   }
 
   return json({ error: 'Method not allowed' }, 405)

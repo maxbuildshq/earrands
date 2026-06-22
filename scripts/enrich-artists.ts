@@ -5,7 +5,8 @@ import { createInterface } from 'node:readline'
 import { enrichArtist, type PipelineConfig } from './lib/enrichment/pipeline.js'
 import { writeReviewFile, readReviewFile, loadProgress, saveProgress, clearProgress, writeBioResearchFiles } from './lib/enrichment/review.js'
 import { isComboEntry } from './lib/enrichment/name-utils.js'
-import type { EnrichmentField, EnrichmentResult, ArtistRow } from './lib/enrichment/types.js'
+import type { EnrichmentField, EnrichmentResult, ArtistRow, BioResearch, BioSource } from './lib/enrichment/types.js'
+import { generateArtistBio } from './lib/enrichment/bio-generator.js'
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ const dryRun = args.includes('--dry-run')
 const force = args.includes('--force')
 const fresh = args.includes('--fresh')
 const resume = args.includes('--resume')
+const autoApply = args.includes('--auto-apply')
 const pollJobs = args.includes('--poll-jobs')
 const pollInterval = parseInt(args.find(a => a.startsWith('--poll-interval='))?.split('=')[1] ?? '30', 10)
 
@@ -26,7 +28,8 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log(`Usage:
   npm run enrich                                    Enrich all unenriched artists
   npm run enrich -- --festival=<slug>               One festival only
-  npm run enrich -- --artist="Speedy J"             Single artist (testing)
+  npm run enrich -- --artist="speedy-j"              Single artist by sort_name
+  npm run enrich -- --artist="a,b,c"                Multiple artists (comma-separated sort_names)
   npm run enrich -- --dry-run                       Preview, no DB writes
   npm run enrich -- --force                         Re-enrich all (ignore enriched_at)
   npm run enrich -- --fresh                         Ignore existing field values (fetch everything from scratch)
@@ -35,6 +38,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --fields=bandcamp               Only fetch specific fields
   npm run enrich -- --fields=instagram,image        Comma-separated field list
   npm run enrich -- --apply=enrichment-review/X.json  Apply reviewed file to DB
+  npm run enrich -- --auto-apply                       Write results directly to DB (no manual --apply step)
   npm run enrich -- --poll-jobs                        Poll enrichment_jobs table for pending jobs
   npm run enrich -- --poll-jobs --poll-interval=60     Custom poll interval (seconds, default: 30)
 
@@ -100,6 +104,15 @@ function confirm(question: string): Promise<boolean> {
   })
 }
 
+function deriveBioSources(research: BioResearch, soundcloudUrl: string | null, discogsId: number | null): BioSource[] {
+  const sources: BioSource[] = []
+  if (research.soundcloud_bio) sources.push({ url: soundcloudUrl ?? '', title: 'SoundCloud', snippet: research.soundcloud_bio.slice(0, 200), type: 'soundcloud' })
+  if (research.discogs_bio) sources.push({ url: `https://www.discogs.com/artist/${discogsId}`, title: 'Discogs', snippet: research.discogs_bio.slice(0, 200), type: 'discogs' })
+  if (research.festival_bio) sources.push({ url: '', title: 'Festival', snippet: research.festival_bio.slice(0, 200), type: 'festival' })
+  sources.push(...research.web_sources)
+  return sources
+}
+
 // ── Apply mode ───────────────────────────────────────────────────────────────
 
 async function applyReviewFile(path: string) {
@@ -133,10 +146,12 @@ async function applyReviewFile(path: string) {
     return
   }
 
-  const ok = await confirm(`Apply enrichment data for ${toApply.length} artists?`)
-  if (!ok) {
-    console.log(chalk.dim('  Aborted.'))
-    return
+  if (!autoApply) {
+    const ok = await confirm(`Apply enrichment data for ${toApply.length} artists?`)
+    if (!ok) {
+      console.log(chalk.dim('  Aborted.'))
+      return
+    }
   }
 
   let updated = 0
@@ -152,12 +167,11 @@ async function applyReviewFile(path: string) {
     }
     if (a.city) updateData.city = a.city
     if (a.country_code) updateData.country_code = a.country_code
-    if (a.bio) {
-      updateData.bio = a.bio
-      updateData.bio_source = a.bio_source
+    if (a.bio_research) {
+      updateData.bio_research = a.bio_research
+      // Derive flat source list for admin provenance display
+      updateData.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
     }
-    if (a.bio_festival) updateData.bio_festival = a.bio_festival
-    if (a.bio_sources) updateData.bio_sources = a.bio_sources
 
     const { error } = await supabase
       .from('artists')
@@ -176,6 +190,8 @@ async function applyReviewFile(path: string) {
 
 // ── Fetch artists ────────────────────────────────────────────────────────────
 
+let festivalName: string | undefined
+
 async function fetchArtists(): Promise<ArtistRow[]> {
   let query = supabase
     .from('artists')
@@ -183,17 +199,13 @@ async function fetchArtists(): Promise<ArtistRow[]> {
 
   if (artistArg) {
     const names = artistArg.split(',').map(n => n.trim()).filter(Boolean)
-    if (names.length === 1) {
-      query = query.ilike('name', names[0])
-    } else {
-      query = query.or(names.map(n => `name.ilike.${n}`).join(','))
-    }
+    query = query.in('sort_name', names)
   }
 
   if (festivalArg) {
     const { data: festival } = await supabase
       .from('festivals')
-      .select('id')
+      .select('id, name')
       .eq('slug', festivalArg)
       .single()
 
@@ -201,6 +213,7 @@ async function fetchArtists(): Promise<ArtistRow[]> {
       console.error(chalk.red(`Festival not found: ${festivalArg}`))
       process.exit(1)
     }
+    festivalName = festival.name
 
     const { data: setIds } = await supabase
       .from('sets')
@@ -283,6 +296,7 @@ async function main() {
     discogsSecret,
     cloudflareAccountId,
     cloudflareApiToken,
+    festivalName,
     fields,
     dryRun,
     onProgress: (artist, step) => {
@@ -400,8 +414,43 @@ async function main() {
     return
   }
 
-  console.log(chalk.dim(`\n  Review the file, then run:`))
-  console.log(chalk.dim(`    npm run enrich -- --apply=${reviewPath}`))
+  if (autoApply) {
+    console.log(chalk.dim('\n  Auto-applying results to DB...'))
+    await applyReviewFile(reviewPath)
+  } else {
+    console.log(chalk.dim(`\n  Review the file, then run:`))
+    console.log(chalk.dim(`    npm run enrich -- --apply=${reviewPath}`))
+  }
+
+  // Generate AI bios from research using Claude CLI
+  const withResearch = results.filter(r => r.bio_research && (
+    r.bio_research.web_sources.length > 0 ||
+    r.bio_research.soundcloud_bio ||
+    r.bio_research.discogs_bio ||
+    r.bio_research.festival_bio
+  ))
+  if (withResearch.length > 0 && !dryRun) {
+    console.log(chalk.dim(`\n  Generating AI bios for ${withResearch.length} artist(s)...`))
+    let generated = 0
+    for (const r of withResearch) {
+      process.stdout.write(`\r  ${chalk.dim('[AI bio]')} ${r.display_name}${''.padEnd(30)}`)
+      const bio = generateArtistBio(r.display_name, r.bio_research!)
+      if (bio) {
+        const { error } = await supabase
+          .from('artists')
+          .update({ bio_generated: bio })
+          .eq('sort_name', r.sort_name)
+        if (error) {
+          console.error(chalk.red(`\n  ✕ ${r.display_name} bio_generated: ${error.message}`))
+        } else {
+          generated++
+        }
+      } else {
+        console.log(chalk.dim(`\r  ${chalk.yellow('–')} ${r.display_name}: insufficient sources for bio${''.padEnd(20)}`))
+      }
+    }
+    console.log(`\r  ${chalk.green(`Generated ${generated}/${withResearch.length} AI bios`)}${''.padEnd(30)}`)
+  }
 }
 
 // ── Poll Jobs Mode ──────────────────────────────────────────────────────────
@@ -435,25 +484,20 @@ async function pollJobsLoop() {
         if (job.festival_slug) jobArgs.push(`--festival=${job.festival_slug}`)
         if (job.fields?.length) jobArgs.push(`--fields=${job.fields.join(',')}`)
         if (job.artist_sort_names?.length) {
-          for (const name of job.artist_sort_names) {
-            jobArgs.push(`--artist=${name}`)
-          }
+          jobArgs.push(`--artist=${job.artist_sort_names.join(',')}`)
         }
 
         // For parse_artists type, run parse-artists script instead
         if (job.type === 'parse_artists') {
-          const { execSync } = await import('node:child_process')
-          const parseCmd = `npx tsx scripts/parse-artists.ts${job.festival_slug ? ` --festival=${job.festival_slug}` : ''}`
-          console.log(chalk.dim(`  Running: ${parseCmd}`))
-          execSync(parseCmd, { stdio: 'inherit', env: process.env })
+          const { execFileSync } = await import('node:child_process')
+          const parseArgs = ['tsx', 'scripts/parse-artists.ts', ...(job.festival_slug ? [`--festival=${job.festival_slug}`] : [])]
+          console.log(chalk.dim(`  Running: npx ${parseArgs.join(' ')}`))
+          execFileSync('npx', parseArgs, { stdio: 'inherit', env: process.env })
         } else {
-          // Re-run enrichment with job params by simulating args
-          // Override the module-level vars by directly calling fetchArtists + enrich logic
-          // For simplicity, use child process
-          const { execSync } = await import('node:child_process')
-          const enrichCmd = `npx tsx scripts/enrich-artists.ts ${jobArgs.join(' ')}`
-          console.log(chalk.dim(`  Running: ${enrichCmd}`))
-          execSync(enrichCmd, { stdio: 'inherit', env: process.env })
+          const { execFileSync } = await import('node:child_process')
+          const enrichArgs = ['tsx', 'scripts/enrich-artists.ts', ...jobArgs, '--auto-apply']
+          console.log(chalk.dim(`  Running: npx ${enrichArgs.join(' ')}`))
+          execFileSync('npx', enrichArgs, { stdio: 'inherit', env: process.env })
         }
 
         await supabase
@@ -492,7 +536,9 @@ if (pollJobs) {
     process.exit(1)
   })
 } else {
-  main().catch(err => {
+  main().then(() => {
+    process.exit(0)
+  }).catch(err => {
     console.error(chalk.red('Fatal error:'), err)
     process.exit(1)
   })
