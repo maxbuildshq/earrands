@@ -3,7 +3,7 @@ import { Heading } from '../../components/ui/Heading'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Input } from '../../components/ui/Input'
-import { useAdminJobs, useCreateJob, useJobAction } from '../../hooks/useAdminJobs'
+import { useAdminJobs, useCreateJob, useJobAction, useDeleteJob } from '../../hooks/useAdminJobs'
 
 function formatDate(d: string | null) {
   if (!d) return '—'
@@ -21,6 +21,7 @@ export default function AdminJobs() {
   const { data: jobs = [], isLoading } = useAdminJobs()
   const create = useCreateJob()
   const action = useJobAction()
+  const deleteJob = useDeleteJob()
 
   const [newType, setNewType] = useState('enrich')
   const [newSlug, setNewSlug] = useState('')
@@ -71,65 +72,82 @@ export default function AdminJobs() {
       </div>
 
       {/* Jobs table */}
-      <div className="border border-border">
-        <div className="grid grid-cols-[100px_120px_1fr_80px_120px_120px_100px] gap-2 px-4 py-2.5 border-b border-border font-mono text-xs uppercase tracking-widest text-text-secondary">
-          <span>Type</span>
-          <span>Status</span>
-          <span>Target</span>
-          <span>Fields</span>
-          <span>Created</span>
-          <span>Duration</span>
-          <span>Actions</span>
-        </div>
+      <div className="border border-border overflow-x-auto">
+        <div className="min-w-[700px]">
+          <div className="grid grid-cols-[80px_110px_1fr_80px_160px_220px] gap-2 px-4 py-2.5 border-b border-border font-mono text-xs uppercase tracking-widest text-text-secondary">
+            <span>Type</span>
+            <span>Status</span>
+            <span>Target</span>
+            <span>Fields</span>
+            <span>Created</span>
+            <span>Actions</span>
+          </div>
 
-        {isLoading ? (
-          <div className="px-4 py-8 text-center font-mono text-sm text-text-secondary">Loading...</div>
-        ) : jobs.length === 0 ? (
-          <div className="px-4 py-8 text-center font-mono text-sm text-text-secondary">No jobs yet.</div>
-        ) : (
-          jobs.map(job => {
-            const target = job.festival_slug
-              ?? (job.artist_sort_names?.length ? `${job.artist_sort_names.length} artists` : '—')
-            const duration = job.started_at && job.completed_at
-              ? `${Math.round((new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) / 1000)}s`
-              : job.started_at ? 'Running...' : '—'
+          {isLoading ? (
+            <div className="px-4 py-8 text-center font-mono text-sm text-text-secondary">Loading...</div>
+          ) : jobs.length === 0 ? (
+            <div className="px-4 py-8 text-center font-mono text-sm text-text-secondary">No jobs yet.</div>
+          ) : (
+            jobs.map(job => {
+              const target = job.festival_slug
+                ?? (job.artist_sort_names?.length ? `${job.artist_sort_names.length} artists` : '—')
 
-            return (
-              <div key={job.id} className="grid grid-cols-[100px_120px_1fr_80px_120px_120px_100px] gap-2 px-4 py-3.5 border-b border-border last:border-b-0 items-center">
-                <span className="font-mono text-sm text-text-primary">{job.type}</span>
-                <Badge variant={STATUS_BADGE[job.status] ?? 'outline'}>{job.status}</Badge>
-                <span className="font-mono text-sm text-text-secondary truncate">{target}</span>
-                <span className="font-mono text-xs text-text-secondary">{job.fields?.join(', ') ?? '—'}</span>
-                <span className="font-mono text-sm text-text-secondary">{formatDate(job.created_at)}</span>
-                <span className="font-mono text-sm text-text-secondary">{duration}</span>
-                <div className="flex gap-1">
-                  {(job.status === 'pending' || job.status === 'running') && (
+              return (
+                <div key={job.id} className="grid grid-cols-[80px_110px_1fr_80px_160px_220px] gap-2 px-4 py-3.5 border-b border-border last:border-b-0 items-center">
+                  <span className="font-mono text-sm text-text-primary">{job.type}</span>
+                  <Badge variant={STATUS_BADGE[job.status] ?? 'outline'}>{job.status}</Badge>
+                  <span className="font-mono text-sm text-text-secondary truncate">{target}</span>
+                  <span className="font-mono text-xs text-text-secondary">{job.fields?.join(', ') ?? '—'}</span>
+                  <span className="font-mono text-sm text-text-secondary">{formatDate(job.created_at)}</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {job.status === 'running' && (
+                      <Button
+                        variant="secondary"
+                        fullWidth={false}
+                        className="!text-xs !px-3 !py-1"
+                        onClick={() => action.mutate({ id: job.id, action: 'mark_done' })}
+                        disabled={action.isPending}
+                      >
+                        Mark Done
+                      </Button>
+                    )}
+                    {(job.status === 'pending' || job.status === 'running') && (
+                      <Button
+                        variant="secondary"
+                        fullWidth={false}
+                        className="!text-xs !px-3 !py-1"
+                        onClick={() => action.mutate({ id: job.id, action: 'cancel' })}
+                        disabled={action.isPending}
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                    {job.status === 'failed' && (
+                      <Button
+                        variant="secondary"
+                        fullWidth={false}
+                        className="!text-xs !px-3 !py-1"
+                        onClick={() => action.mutate({ id: job.id, action: 'retry' })}
+                        disabled={action.isPending}
+                      >
+                        Retry
+                      </Button>
+                    )}
                     <Button
-                      variant="secondary"
+                      variant="danger"
                       fullWidth={false}
                       className="!text-xs !px-3 !py-1"
-                      onClick={() => action.mutate({ id: job.id, action: 'cancel' })}
-                      disabled={action.isPending}
+                      onClick={() => deleteJob.mutate(job.id)}
+                      disabled={deleteJob.isPending}
                     >
-                      Cancel
+                      Delete
                     </Button>
-                  )}
-                  {job.status === 'failed' && (
-                    <Button
-                      variant="secondary"
-                      fullWidth={false}
-                      className="!text-xs !px-3 !py-1"
-                      onClick={() => action.mutate({ id: job.id, action: 'retry' })}
-                      disabled={action.isPending}
-                    >
-                      Retry
-                    </Button>
-                  )}
+                  </div>
                 </div>
-              </div>
-            )
-          })
-        )}
+              )
+            })
+          )}
+        </div>
       </div>
 
       {/* Error details */}

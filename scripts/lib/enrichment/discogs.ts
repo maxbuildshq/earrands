@@ -6,6 +6,7 @@ const DISCOGS_API = 'https://api.discogs.com'
 export type DiscogsArtistResult = {
   discogs_id: number
   image_url: string | null
+  all_images: string[]
   instagram_url: string | null
   soundcloud_url: string | null
   bandcamp_url: string | null
@@ -72,6 +73,8 @@ async function fetchDiscogsArtist(
   const primaryImage = data.images?.find(img => img.type === 'primary')
   const anyImage = data.images?.[0]
   const image_url = primaryImage?.uri ?? anyImage?.uri ?? null
+  // All image URLs for multi-candidate scoring (up to 5)
+  const all_images = (data.images ?? []).slice(0, 5).map(img => img.uri).filter(Boolean)
 
   let instagram_url: string | null = null
   let soundcloud_url: string | null = null
@@ -94,6 +97,7 @@ async function fetchDiscogsArtist(
   return {
     discogs_id: data.id,
     image_url,
+    all_images,
     instagram_url,
     soundcloud_url,
     bandcamp_url,

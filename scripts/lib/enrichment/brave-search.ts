@@ -15,9 +15,13 @@ type BraveResponse = {
 }
 
 const EXCLUDED_DOMAINS = [
-  'soundcloud.com', 'instagram.com', 'spotify.com', 'linktr.ee',
-  'facebook.com', 'twitter.com', 'x.com', 'ra.co', 'tiktok.com',
+  'soundcloud.com', 'instagram.com', 'linktr.ee',
+  'facebook.com', 'twitter.com', 'x.com', 'tiktok.com',
   'youtube.com', 'music.apple.com', 'deezer.com',
+  // Junk aggregators with no original bio content
+  'songfromlink.com', 'tunefind.com', 'last.fm', 'musicbrainz.org',
+  'allmusic.com', 'setlist.fm', '1001tracklists.com', 'beatport.com',
+  'traxsource.com', 'bandsintown.com', 'songkick.com', 'genius.com',
 ]
 
 function isExcludedDomain(url: string): boolean {
@@ -59,21 +63,39 @@ export async function searchInstagram(
   return null
 }
 
+// Only a small set in the query string — Brave rejects long queries (422).
+// The full EXCLUDED_DOMAINS list handles the rest client-side via isExcludedDomain().
+const BIO_QUERY_EXCLUSIONS = [
+  'soundcloud.com', 'instagram.com', 'youtube.com',
+]
+
 export async function searchArtistBio(
   artistName: string,
   apiKey: string,
   fetchPages = true,
 ): Promise<BioSource[]> {
-  const excludeSites = EXCLUDED_DOMAINS.map(d => `-site:${d}`).join(' ')
+  const excludeSites = BIO_QUERY_EXCLUSIONS.map(d => `-site:${d}`).join(' ')
   const query = `"${artistName}" biography electronic music DJ ${excludeSites}`
-  const results = await braveSearch(query, apiKey)
+  const results = await braveSearch(query, apiKey, 10)
 
   const sources: BioSource[] = []
 
   // Filter out excluded domains (belt-and-suspenders — search exclusions aren't always perfect)
   const validResults = results.filter(r => !isExcludedDomain(r.url))
 
-  for (const result of validResults.slice(0, 5)) {
+  // Normalise artist name for content relevance check (lowercase, strip punctuation)
+  const artistNameNorm = artistName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+  const artistTokens = artistNameNorm.split(/\s+/).filter(t => t.length > 1)
+
+  function contentMentionsArtist(text: string): boolean {
+    if (artistTokens.length === 0) return true
+    const norm = text.toLowerCase().replace(/[^a-z0-9\s]/g, '')
+    return artistTokens.every(t => norm.includes(t))
+  }
+
+  for (const result of validResults.slice(0, 10)) {
+    if (sources.filter(s => s.content).length >= 5) break
+
     const source: BioSource = {
       url: result.url,
       title: result.title.replace(/<[^>]+>/g, ''),
@@ -81,7 +103,7 @@ export async function searchArtistBio(
       type: 'web',
     }
 
-    if (fetchPages && sources.filter(s => s.content).length < 3) {
+    if (fetchPages) {
       try {
         await sleep(500)
         const res = await fetch(result.url, {
@@ -91,7 +113,7 @@ export async function searchArtistBio(
         if (res.ok) {
           const html = await res.text()
           const text = extractTextFromHtml(html)
-          if (text.length > 100) {
+          if (text.length > 200 && contentMentionsArtist(text)) {
             source.content = text.slice(0, 5000)
           }
         }
@@ -124,10 +146,11 @@ function extractTextFromHtml(html: string): string {
 async function braveSearch(
   query: string,
   apiKey: string,
+  count = 5,
 ): Promise<BraveResult[]> {
   const params = new URLSearchParams({
     q: query,
-    count: '5',
+    count: String(count),
   })
 
   const res = await fetch(`${BRAVE_API_URL}?${params}`, {
