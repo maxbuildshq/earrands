@@ -462,11 +462,13 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
     if (bio) { cols.push('bio'); vals.push(`'${escSql(bio)}'`) }
     if (sourceUrl) { cols.push('source_url'); vals.push(`'${escSql(sourceUrl)}'`) }
     if (bioSource) { cols.push('bio_source'); vals.push(`'${escSql(bioSource)}'`) }
+    if (bio) { cols.push('bio_festival'); vals.push(`'${escSql(bio)}'`) }
     lines.push(`  INSERT INTO artists (${cols.join(', ')})`)
     lines.push(`  VALUES (${vals.join(', ')})`)
     lines.push(`  ON CONFLICT (sort_name) DO UPDATE SET`)
     lines.push(`    bio = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio ELSE artists.bio END,`)
     lines.push(`    bio_source = CASE WHEN EXCLUDED.bio IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio_source ELSE artists.bio_source END,`)
+    lines.push(`    bio_festival = CASE WHEN EXCLUDED.bio_festival IS NOT NULL AND (artists.bio IS NULL OR length(EXCLUDED.bio) > length(artists.bio)) THEN EXCLUDED.bio_festival ELSE artists.bio_festival END,`)
     lines.push(`    source_url = COALESCE(EXCLUDED.source_url, artists.source_url);`)
     lines.push('')
   }

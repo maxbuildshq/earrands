@@ -60,6 +60,30 @@ describe('parseArtistName', () => {
         role: 'b2b',
       })
     })
+
+    it('splits an unprotected "&" pair embedded in a B2B chain', () => {
+      expect(parseArtistName('Unglued B2B Degs & Ruthless')).toEqual({
+        collective: null,
+        members: ['Unglued', 'Degs', 'Ruthless'],
+        role: 'b2b',
+      })
+    })
+
+    it('splits an unprotected "&" pair at the start of a B2B chain', () => {
+      expect(parseArtistName('Flava D & LowQui B2B S.P.Y')).toEqual({
+        collective: null,
+        members: ['Flava D', 'LowQui', 'S.P.Y'],
+        role: 'b2b',
+      })
+    })
+
+    it('keeps a whitelisted duo intact inside a B2B chain', () => {
+      expect(parseArtistName('Unglued B2B Camo & Krooked')).toEqual({
+        collective: null,
+        members: ['Unglued', 'Camo & Krooked'],
+        role: 'b2b',
+      })
+    })
   })
 
   describe('F2F', () => {
@@ -160,6 +184,162 @@ describe('parseArtistName', () => {
     it('does not split parenthetical without comma or ampersand', () => {
       const result = parseArtistName('Artist (live)')
       expect(result.role).toBe('solo')
+    })
+  })
+
+  describe('descriptor brackets', () => {
+    it('strips descriptor parens for parsing but treats as solo', () => {
+      expect(parseArtistName('Nu:Tone (Soul & Rare Groove Set)')).toEqual({
+        collective: null,
+        members: ['Nu:Tone'],
+        role: 'solo',
+      })
+    })
+
+    it('strips 140 Set descriptor', () => {
+      expect(parseArtistName('Savannah (140 Set)')).toEqual({
+        collective: null,
+        members: ['Savannah'],
+        role: 'solo',
+      })
+    })
+
+    it('strips FKA descriptor', () => {
+      expect(parseArtistName('Lou Nour (FKA Sicaria) & Koast')).toEqual({
+        collective: null,
+        members: ['Lou Nour', 'Koast'],
+        role: 'collab',
+      })
+    })
+
+    it('strips DJ Set descriptor', () => {
+      expect(parseArtistName('Jakes (DJ Set) & Javeon')).toEqual({
+        collective: null,
+        members: ['Jakes', 'Javeon'],
+        role: 'collab',
+      })
+    })
+
+    it('still parses member brackets without descriptor keywords', () => {
+      expect(parseArtistName('Virus Trinity (Ed Rush B2B Optical B2B Audio)')).toEqual({
+        collective: 'Virus Trinity',
+        members: ['Ed Rush', 'Optical', 'Audio'],
+        role: 'member',
+      })
+    })
+
+    it('parses Run In The Jungle with member parens and extra collaborator', () => {
+      expect(parseArtistName('Run In The Jungle (T>I & D*Minds) & Carasel')).toEqual({
+        collective: 'Run In The Jungle',
+        members: ['T>I', 'D*Minds', 'Carasel'],
+        role: 'member',
+      })
+    })
+  })
+
+  describe('hosted by', () => {
+    it('splits main act from hosted MC', () => {
+      expect(parseArtistName('Serum hosted by Carasel')).toEqual({
+        collective: null,
+        members: ['Serum', 'Carasel'],
+        role: 'member',
+      })
+    })
+  })
+
+  describe('ft. / feat.', () => {
+    it('parses ft.', () => {
+      expect(parseArtistName('Doktor ft. Kanobie')).toEqual({
+        collective: 'Doktor',
+        members: ['Kanobie'],
+        role: 'member',
+      })
+    })
+
+    it('parses feat.', () => {
+      expect(parseArtistName('Artist A feat. Artist B')).toEqual({
+        collective: 'Artist A',
+        members: ['Artist B'],
+        role: 'member',
+      })
+    })
+  })
+
+  describe('case-insensitive separators', () => {
+    it('splits on uppercase X', () => {
+      expect(parseArtistName('P Money X Whiney')).toEqual({
+        collective: null,
+        members: ['P Money', 'Whiney'],
+        role: 'collab',
+      })
+    })
+
+    it('splits on uppercase VS', () => {
+      expect(parseArtistName('Artist A VS Artist B')).toEqual({
+        collective: null,
+        members: ['Artist A', 'Artist B'],
+        role: 'vs',
+      })
+    })
+  })
+
+  describe('colon-name guard', () => {
+    it('does not split En:Vy as a collective', () => {
+      expect(parseArtistName('En:Vy')).toEqual({
+        collective: null,
+        members: ['En:Vy'],
+        role: 'solo',
+      })
+    })
+
+    it('does not split Nu:Tone as a collective', () => {
+      expect(parseArtistName('Nu:Tone & SP:MC')).toEqual({
+        collective: null,
+        members: ['Nu:Tone', 'SP:MC'],
+        role: 'collab',
+      })
+    })
+
+    it('still parses real colon collectives', () => {
+      expect(parseArtistName('LSD: Luke Slater, Steve Bicknell and Function')).toEqual({
+        collective: 'LSD',
+        members: ['Luke Slater', 'Steve Bicknell', 'Function'],
+        role: 'member',
+      })
+    })
+  })
+
+  describe('known-duo allowlist', () => {
+    it('does not split Camo & Krooked', () => {
+      expect(parseArtistName('Camo & Krooked')).toEqual({
+        collective: null,
+        members: ['Camo & Krooked'],
+        role: 'solo',
+      })
+    })
+
+    it('keeps Camo & Krooked together when with other artists', () => {
+      expect(parseArtistName('Camo & Krooked & Daxta')).toEqual({
+        collective: null,
+        members: ['Camo & Krooked', 'Daxta'],
+        role: 'collab',
+      })
+    })
+
+    it('keeps Pola & Bryson together', () => {
+      expect(parseArtistName('Pola & Bryson & Linguistics')).toEqual({
+        collective: null,
+        members: ['Pola & Bryson', 'Linguistics'],
+        role: 'collab',
+      })
+    })
+
+    it('keeps Ed Rush & Optical in B2B', () => {
+      expect(parseArtistName('Ed Rush & Optical B2B Audio')).toEqual({
+        collective: null,
+        members: ['Ed Rush & Optical', 'Audio'],
+        role: 'b2b',
+      })
     })
   })
 
