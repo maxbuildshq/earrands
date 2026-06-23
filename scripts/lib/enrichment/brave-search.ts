@@ -36,8 +36,9 @@ function isExcludedDomain(url: string): boolean {
 export async function searchSoundCloud(
   artistName: string,
   apiKey: string,
+  searchKeywords?: string | null,
 ): Promise<string | null> {
-  const query = buildSearchQuery(artistName, 'soundcloud.com')
+  const query = buildSearchQuery(artistName, 'soundcloud.com', searchKeywords)
   const results = await braveSearch(query, apiKey)
 
   for (const result of results) {
@@ -51,8 +52,9 @@ export async function searchSoundCloud(
 export async function searchInstagram(
   artistName: string,
   apiKey: string,
+  searchKeywords?: string | null,
 ): Promise<string | null> {
-  const query = buildSearchQuery(artistName, 'instagram.com')
+  const query = buildSearchQuery(artistName, 'instagram.com', searchKeywords)
   const results = await braveSearch(query, apiKey)
 
   for (const result of results) {
@@ -73,9 +75,11 @@ export async function searchArtistBio(
   artistName: string,
   apiKey: string,
   fetchPages = true,
+  searchKeywords?: string | null,
 ): Promise<BioSource[]> {
   const excludeSites = BIO_QUERY_EXCLUSIONS.map(d => `-site:${d}`).join(' ')
-  const query = `"${artistName}" biography electronic music DJ ${excludeSites}`
+  const kw = searchKeywords?.trim()
+  const query = `"${artistName}"${kw ? ` ${kw}` : ''} biography electronic music DJ ${excludeSites}`
   const results = await braveSearch(query, apiKey, 10)
 
   const sources: BioSource[] = []

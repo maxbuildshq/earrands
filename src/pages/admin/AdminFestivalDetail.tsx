@@ -5,13 +5,49 @@ import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
 import { Label } from '../../components/ui/Label'
 import { Badge } from '../../components/ui/Badge'
-import { useAdminFestival, useUpdateFestival, useToggleFestivalField } from '../../hooks/useAdminFestivals'
+import { useAdminFestival, useUpdateFestival, useToggleFestivalField, useUpdateStage } from '../../hooks/useAdminFestivals'
 import { useStages, useSets } from '../../hooks/useFestivalData'
 import { useSendNotification } from '../../hooks/useAdminNotifications'
 import { useCreateJob } from '../../hooks/useAdminJobs'
 
 function formatDate(d: string) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function InlineStageName({ name, onSave }: { name: string; onSave: (name: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+
+  function commit() {
+    if (draft.trim() && draft !== name) onSave(draft.trim())
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        className="bg-transparent border-b border-accent text-accent font-mono text-sm outline-none"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') { setDraft(name); setEditing(false) }
+        }}
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <span
+      className="text-text-primary cursor-pointer hover:text-accent"
+      onClick={() => { setDraft(name); setEditing(true) }}
+      title="Click to rename"
+    >
+      {name}
+    </span>
+  )
 }
 
 export default function AdminFestivalDetail() {
@@ -21,6 +57,7 @@ export default function AdminFestivalDetail() {
   const { data: sets = [] } = useSets(festival?.id)
   const update = useUpdateFestival()
   const toggle = useToggleFestivalField()
+  const updateStage = useUpdateStage()
   const notify = useSendNotification()
   const createJob = useCreateJob()
 
@@ -230,7 +267,10 @@ export default function AdminFestivalDetail() {
             {stages.map(stage => (
               <div key={stage.id} className="flex items-center gap-3 font-mono text-sm py-1.5">
                 <Badge variant="accent-outline">{stage.sort_order}</Badge>
-                <span className="text-text-primary">{stage.name}</span>
+                <InlineStageName
+                  name={stage.name}
+                  onSave={name => updateStage.mutate({ stageId: stage.id, name })}
+                />
               </div>
             ))}
           </div>

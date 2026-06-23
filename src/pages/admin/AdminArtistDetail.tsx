@@ -44,6 +44,8 @@ export default function AdminArtistDetail() {
     image_url: '', city: '', country_code: '',
   })
 
+  const [searchKeywords, setSearchKeywords] = useState('')
+
   const update = useUpdateArtist()
   const updateAndRefetch = useUpdateAndRefetch()
   const activateBio = useActivateBio()
@@ -155,7 +157,7 @@ export default function AdminArtistDetail() {
           <Button
             variant="secondary"
             fullWidth={false}
-            onClick={() => createJob.mutate({ type: 'enrich', artist_sort_names: [artist.sort_name] })}
+            onClick={() => createJob.mutate({ type: 'enrich', artist_sort_names: [artist.sort_name], ...(searchKeywords && { search_keywords: searchKeywords }) })}
             disabled={createJob.isPending}
           >
             Enrich
@@ -163,11 +165,18 @@ export default function AdminArtistDetail() {
           <Button
             variant="secondary"
             fullWidth={false}
-            onClick={() => createJob.mutate({ type: 'enrich', artist_sort_names: [artist.sort_name], fields: ['bio'] })}
+            onClick={() => createJob.mutate({ type: 'enrich', artist_sort_names: [artist.sort_name], fields: ['bio'], ...(searchKeywords && { search_keywords: searchKeywords }) })}
             disabled={createJob.isPending}
           >
             Bio + AI
           </Button>
+          <input
+            className="bg-transparent border-b border-border text-text-primary font-mono text-xs w-40 outline-none placeholder:text-border focus:border-accent py-1"
+            value={searchKeywords}
+            onChange={e => setSearchKeywords(e.target.value)}
+            placeholder="Search keywords..."
+            title="Optional keywords appended to Brave search queries (e.g. &quot;drum &amp; bass&quot;)"
+          />
         </div>
       </div>
 

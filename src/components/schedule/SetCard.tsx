@@ -13,6 +13,8 @@ type Props = {
   onRate: (value: -1 | 1) => void
   onOpenSheet: () => void
   showConflict?: boolean
+  revealed?: boolean
+  onReveal?: () => void
 }
 
 function formatTime(time: string) {
@@ -25,16 +27,17 @@ function getLeadImage(artists: SetArtistWithBio[] | null): string | null {
   return sorted[0].artists.image_url
 }
 
-export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, onOpenSheet, showConflict }: Props) {
+export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, onOpenSheet, showConflict, revealed, onReveal }: Props) {
   const [imgError, setImgError] = useState(false)
-  const leadImage = getLeadImage(set.set_artists)
+  const leadImage = set.is_music_set ? getLeadImage(set.set_artists) : null
+  const handleClick = () => { if (set.is_music_set) onOpenSheet(); else onReveal?.() }
 
   return (
     <div
         role="button"
         tabIndex={0}
-        onClick={onOpenSheet}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
+        onClick={handleClick}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
         className="relative bg-surface-raised border border-border p-3 transition-colors cursor-pointer hover:bg-surface-hover"
         style={{
           ...(isNow ? { borderColor: 'var(--color-accent)', boxShadow: 'var(--shadow-now)' } : {}),
@@ -93,8 +96,14 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
             </div>
           </div>
 
-          <SetActions isGoing={isGoing} rating={rating} onToggleGoing={onToggleGoing} onRate={onRate} />
+          <SetActions isGoing={isGoing} rating={rating} onToggleGoing={onToggleGoing} onRate={onRate} showRating={set.is_music_set} />
         </div>
+
+        {revealed && (
+          <span className="absolute left-3 top-3 z-40 px-2 py-1 bg-surface border border-border font-mono font-bold text-xs uppercase text-text-primary shadow-lg max-w-[calc(100%-1.5rem)]">
+            {set.artist_name}
+          </span>
+        )}
       </div>
   )
 }

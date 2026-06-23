@@ -193,6 +193,8 @@ Deno.serve(async (req) => {
             refetchedFields.bio_source = 'soundcloud'
           }
         }
+        // Keep the embed URL in sync with the profile URL whenever it changes
+        refetchedFields.soundcloud_embed_url = updates.soundcloud_url
       }
 
       const merged = { ...refetchedFields, ...updates }

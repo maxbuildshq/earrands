@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   // POST — create job
   if (req.method === 'POST') {
     const body = await req.json()
-    const { type, festival_slug, artist_sort_names, fields } = body
+    const { type, festival_slug, artist_sort_names, fields, search_keywords } = body
 
     const { data, error } = await supabase
       .from('enrichment_jobs')
@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
         festival_slug: festival_slug ?? null,
         artist_sort_names: artist_sort_names ?? null,
         fields: fields ?? null,
+        search_keywords: search_keywords || null,
       })
       .select()
       .single()
