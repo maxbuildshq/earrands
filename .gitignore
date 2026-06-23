@@ -26,3 +26,4 @@ dist-ssr
 scraped/
 style-previews/
 enrichment-review/
+supabase/.temp/

@@ -28,7 +28,7 @@ export function useAdminJobs() {
 export function useCreateJob() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (params: { type?: string; festival_slug?: string; artist_sort_names?: string[]; fields?: string[] }) =>
+    mutationFn: (params: { type?: string; festival_slug?: string; artist_sort_names?: string[]; fields?: string[]; search_keywords?: string }) =>
       adminFetch('admin-enrichment', { method: 'POST', body: params }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] })

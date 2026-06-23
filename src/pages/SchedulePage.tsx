@@ -6,6 +6,7 @@ import { useUserPlans } from '../hooks/useUserPlans'
 import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { useAuth } from '../hooks/useAuth'
+import { useRevealTooltip } from '../hooks/useRevealTooltip'
 import { DayToggle } from '../components/schedule/DayToggle'
 import { StagesSheet } from '../components/schedule/StagesSheet'
 import { SetCard } from '../components/schedule/SetCard'
@@ -32,6 +33,7 @@ export function SchedulePage() {
   const { planSetIds, isGoing, toggleGoing } = useUserPlans()
   const { getRating, setRating } = useUserRatings()
   const now = useNow()
+  const { revealedId, reveal } = useRevealTooltip()
 
   const days = useMemo(() => festival ? getDays(festival.start_date, festival.end_date) : [], [festival])
 
@@ -117,12 +119,17 @@ export function SchedulePage() {
   )
   const visibleStages = useMemo(() => orderVisibleStages(stages, hidden, pinned), [stages, hidden, pinned])
 
-  // In My Picks, drop lanes with no picked (timed) set on this day so the grid isn't mostly empty.
-  const timetableStages = useMemo(() => {
-    if (!picksOnly) return visibleStages
-    const withPicks = new Set(daySets.filter(hasValidTime).map(s => s.stage_id))
-    return visibleStages.filter(st => withPicks.has(st.id))
-  }, [picksOnly, visibleStages, daySets])
+  // Stages with at least one (timed, picks-respecting) set on the selected day — used to hide
+  // empty lanes from the timetable. The full stage list (including empty-today ones) still
+  // shows in StagesSheet so hide/pin prefs remain editable for other days.
+  const stagesWithSetsToday = useMemo(
+    () => new Set(daySets.filter(hasValidTime).map(s => s.stage_id)),
+    [daySets],
+  )
+  const timetableStages = useMemo(
+    () => visibleStages.filter(st => stagesWithSetsToday.has(st.id)),
+    [visibleStages, stagesWithSetsToday],
+  )
 
   const nowScrollIndex = useMemo(() => {
     const firstNowIdx = filteredSets.findIndex(s =>
@@ -338,6 +345,8 @@ export function SchedulePage() {
                     onRate={(v) => setRating(set.id, v)}
                     onOpenSheet={() => openSheet(set)}
                     showConflict={conflictIds.has(set.id)}
+                    revealed={revealedId === set.id}
+                    onReveal={() => reveal(set.id)}
                   />
                 </div>
               </div>
@@ -379,6 +388,7 @@ export function SchedulePage() {
           stages={stages}
           hidden={hidden}
           pinned={pinned}
+          stagesWithSetsToday={stagesWithSetsToday}
           onToggleHidden={toggleHidden}
           onTogglePin={togglePin}
           onShowAll={showAllStages}

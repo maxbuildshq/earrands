@@ -209,6 +209,75 @@ function InlineEdit({
   )
 }
 
+function InlineLocationEdit({
+  city,
+  countryCode,
+  onSave,
+}: {
+  city: string | null
+  countryCode: string | null
+  onSave: (city: string, countryCode: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draftCity, setDraftCity] = useState(city ?? '')
+  const [draftCountry, setDraftCountry] = useState(countryCode ?? '')
+
+  function commit() {
+    if (draftCity !== (city ?? '') || draftCountry !== (countryCode ?? '')) {
+      onSave(draftCity, draftCountry)
+    }
+    setEditing(false)
+  }
+
+  function cancel() {
+    setDraftCity(city ?? '')
+    setDraftCountry(countryCode ?? '')
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1">
+        <input
+          className="bg-transparent border-b border-accent text-accent font-mono text-sm w-20 outline-none"
+          value={draftCity}
+          onChange={e => setDraftCity(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') cancel()
+          }}
+          placeholder="City"
+          autoFocus
+        />
+        <input
+          className="bg-transparent border-b border-accent text-accent font-mono text-sm w-10 outline-none uppercase"
+          value={draftCountry}
+          onChange={e => setDraftCountry(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit()
+            if (e.key === 'Escape') cancel()
+          }}
+          placeholder="CC"
+          maxLength={2}
+        />
+      </div>
+    )
+  }
+
+  const display = [city, countryCode].filter(Boolean).join(', ')
+  return (
+    <span
+      className="text-text-secondary cursor-pointer hover:text-accent"
+      onClick={() => { setDraftCity(city ?? ''); setDraftCountry(countryCode ?? ''); setEditing(true) }}
+      title="Click to edit"
+    >
+      {display || '—'}
+    </span>
+  )
+}
+
 export default function AdminArtistList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('q') ?? ''
@@ -237,6 +306,7 @@ export default function AdminArtistList() {
   const setPageSize = (v: number) => setFilter('size', String(v))
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [searchKeywords, setSearchKeywords] = useState('')
 
   const { data: festivals = [] } = useAdminFestivals()
   useAdminJobs() // polls jobs — auto-refreshes artist data when jobs complete
@@ -295,13 +365,13 @@ export default function AdminArtistList() {
 
   function handleBulkEnrich() {
     const names = artists.filter(a => selected.has(a.id)).map(a => a.sort_name)
-    createJob.mutate({ type: 'enrich', artist_sort_names: names })
+    createJob.mutate({ type: 'enrich', artist_sort_names: names, ...(searchKeywords && { search_keywords: searchKeywords }) })
     setSelected(new Set())
   }
 
   function handleBulkBioResearch() {
     const names = artists.filter(a => selected.has(a.id)).map(a => a.sort_name)
-    createJob.mutate({ type: 'enrich', artist_sort_names: names, fields: ['bio'] })
+    createJob.mutate({ type: 'enrich', artist_sort_names: names, fields: ['bio'], ...(searchKeywords && { search_keywords: searchKeywords }) })
     setSelected(new Set())
   }
 
@@ -310,11 +380,11 @@ export default function AdminArtistList() {
   }
 
   function handleEnrichOne(sortName: string) {
-    createJob.mutate({ type: 'enrich', artist_sort_names: [sortName] })
+    createJob.mutate({ type: 'enrich', artist_sort_names: [sortName], ...(searchKeywords && { search_keywords: searchKeywords }) })
   }
 
   function handleBioResearchOne(sortName: string) {
-    createJob.mutate({ type: 'enrich', artist_sort_names: [sortName], fields: ['bio'] })
+    createJob.mutate({ type: 'enrich', artist_sort_names: [sortName], fields: ['bio'], ...(searchKeywords && { search_keywords: searchKeywords }) })
   }
 
   function handleInlineSave(artistId: string, field: string, value: string, oldUrl: string | null) {
@@ -323,6 +393,10 @@ export default function AdminArtistList() {
     } else {
       updateArtist.mutate({ id: artistId, [field]: value || null } as any)
     }
+  }
+
+  function handleLocationSave(artistId: string, city: string, countryCode: string) {
+    updateArtist.mutate({ id: artistId, city: city || null, country_code: countryCode || null } as any)
   }
 
   function handlePageSizeChange(newSize: number) {
@@ -382,6 +456,13 @@ export default function AdminArtistList() {
             Clear
           </button>
         )}
+        <input
+          className="bg-transparent border-b border-border text-text-primary font-mono text-xs w-40 outline-none placeholder:text-border focus:border-accent"
+          value={searchKeywords}
+          onChange={e => setSearchKeywords(e.target.value)}
+          placeholder="Search keywords..."
+          title="Optional keywords appended to Brave search queries (e.g. &quot;drum &amp; bass&quot;)"
+        />
         <div className="ml-auto flex items-center gap-2">
           <span className="text-text-secondary text-xs uppercase tracking-wider">Per page:</span>
           {PAGE_SIZES.map(s => (
@@ -434,8 +515,12 @@ export default function AdminArtistList() {
                       {a.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-3 text-text-secondary max-w-[120px]">
-                    {[a.city, a.country_code].filter(Boolean).join(', ') || '—'}
+                  <td className="px-3 py-3 max-w-[120px]">
+                    <InlineLocationEdit
+                      city={a.city}
+                      countryCode={a.country_code}
+                      onSave={(city, countryCode) => handleLocationSave(a.id, city, countryCode)}
+                    />
                   </td>
                   <td className="px-3 py-3 max-w-[160px]">
                     <InlineEdit

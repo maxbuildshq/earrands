@@ -7,13 +7,14 @@ type Props = {
   stages: Stage[]
   hidden: Set<string>
   pinned: string[]
+  stagesWithSetsToday?: Set<string | null>
   onToggleHidden: (id: string) => void
   onTogglePin: (id: string) => void
   onShowAll: () => void
   onClose: () => void
 }
 
-export function StagesSheet({ stages, hidden, pinned, onToggleHidden, onTogglePin, onShowAll, onClose }: Props) {
+export function StagesSheet({ stages, hidden, pinned, stagesWithSetsToday, onToggleHidden, onTogglePin, onShowAll, onClose }: Props) {
   const visibleCount = stages.filter(s => !hidden.has(s.id)).length
 
   // Sheet order: pinned first (in pin order), then the rest by sort_order — hidden rows stay listed (dimmed).
@@ -70,8 +71,13 @@ export function StagesSheet({ stages, hidden, pinned, onToggleHidden, onTogglePi
                 )}
               </Button>
 
-              <span className={`flex-1 min-w-0 font-mono font-bold text-sm uppercase leading-tight break-words ${visible ? 'text-text-primary' : 'text-text-secondary/40'}`}>
-                {stage.name}
+              <span className="flex-1 min-w-0">
+                <span className={`block font-mono font-bold text-sm uppercase leading-tight break-words ${visible ? 'text-text-primary' : 'text-text-secondary/40'}`}>
+                  {stage.name}
+                </span>
+                {stagesWithSetsToday && !stagesWithSetsToday.has(stage.id) && (
+                  <span className="block font-mono text-xs text-text-secondary/50 normal-case">No sets today</span>
+                )}
               </span>
 
               <button

@@ -78,6 +78,14 @@ function scoreDetections(detections: DetrDetection[]): {
   return { score, person_detected: true, person_count, person_bbox_ratio: maxRatio }
 }
 
+const SOUNDCLOUD_EARLY_EXIT_SCORE = 60
+
+function sourceBonusFor(source: string): number {
+  if (source === 'soundcloud-image') return 15
+  if (source === 'discogs-image') return 1
+  return 0
+}
+
 export async function scoreImageCandidates(
   candidates: Array<{ url: string; source: string }>,
   config: ImageScorerConfig,
@@ -85,7 +93,7 @@ export async function scoreImageCandidates(
   const results: ImageCandidate[] = []
 
   for (const candidate of candidates) {
-    const sourceBonus = candidate.source === 'discogs-image' ? 1 : 0
+    const sourceBonus = sourceBonusFor(candidate.source)
 
     if (config.dryRun) {
       results.push({
@@ -122,6 +130,13 @@ export async function scoreImageCandidates(
         person_bbox_ratio: null,
         error: err.message,
       })
+    }
+
+    // SoundCloud avatar is self-uploaded by the artist — trust it outright once it
+    // clears a confident person-detection threshold, skipping the remaining candidates.
+    const last = results[results.length - 1]
+    if (last.source === 'soundcloud-image' && last.score > SOUNDCLOUD_EARLY_EXIT_SCORE) {
+      break
     }
   }
 

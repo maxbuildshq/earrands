@@ -39,6 +39,14 @@ describe('buildSearchQuery', () => {
   it('works for instagram.com site', () => {
     expect(buildSearchQuery('Nina Kraviz', 'instagram.com')).toBe('"Nina Kraviz" dj music site:instagram.com')
   })
+  it('appends search keywords when provided', () => {
+    expect(buildSearchQuery('Calibre', 'soundcloud.com', 'drum & bass')).toBe('"Calibre" drum & bass dj music site:soundcloud.com')
+  })
+  it('ignores empty/null keywords', () => {
+    expect(buildSearchQuery('Calibre', 'soundcloud.com', '')).toBe('"Calibre" dj music site:soundcloud.com')
+    expect(buildSearchQuery('Calibre', 'soundcloud.com', null)).toBe('"Calibre" dj music site:soundcloud.com')
+    expect(buildSearchQuery('Calibre', 'soundcloud.com', undefined)).toBe('"Calibre" dj music site:soundcloud.com')
+  })
 })
 
 describe('normalizeUrl', () => {

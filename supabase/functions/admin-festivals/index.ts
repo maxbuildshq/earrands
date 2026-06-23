@@ -121,5 +121,31 @@ Deno.serve(async (req) => {
     return json(data)
   }
 
+  // POST — actions (update_stage)
+  if (req.method === 'POST') {
+    const body = await req.json()
+    const action = body.action
+
+    if (action === 'update_stage') {
+      const { stage_id, name } = body
+      if (!stage_id || !name) return json({ error: 'Missing stage_id or name' }, 400)
+
+      // stage_id is a UUID FK on sets, so renaming a stage never breaks existing links
+      const { data, error } = await supabase
+        .from('stages')
+        .update({ name })
+        .eq('id', stage_id)
+        .select()
+        .single()
+      if (error) {
+        if (error.code === '23505') return json({ error: 'A stage with this name already exists for this festival' }, 409)
+        return json({ error: error.message }, 500)
+      }
+      return json(data)
+    }
+
+    return json({ error: 'Unknown action' }, 400)
+  }
+
   return json({ error: 'Method not allowed' }, 405)
 })

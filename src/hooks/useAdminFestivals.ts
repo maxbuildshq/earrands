@@ -63,6 +63,17 @@ export function useUpdateFestival() {
   })
 }
 
+export function useUpdateStage() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ stageId, name }: { stageId: string; name: string }) =>
+      adminFetch('admin-festivals', { method: 'POST', body: { action: 'update_stage', stage_id: stageId, name } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stages'] })
+    },
+  })
+}
+
 export function useToggleFestivalField() {
   const queryClient = useQueryClient()
   return useMutation({

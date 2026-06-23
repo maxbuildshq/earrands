@@ -24,6 +24,8 @@ type Props = {
   onToggleGoing: () => void
   onRate: (value: -1 | 1) => void
   onOpenSheet: () => void
+  revealed: boolean
+  onReveal: () => void
 }
 
 const ACID = 'var(--color-accent)'
@@ -32,6 +34,7 @@ const CONFLICT = 'var(--color-conflict)'
 export function TimetableSetBlock({
   set, bounds, pxPerMin, top, height,
   isNow, isGoing, rating, isConflict, isPast, endsInMin, onToggleGoing, onRate, onOpenSheet,
+  revealed, onReveal,
 }: Props) {
   const [imgError, setImgError] = useState(false)
   const pos = setPosition(set, bounds, pxPerMin)
@@ -57,11 +60,6 @@ export function TimetableSetBlock({
   }
 
   const style: CSSProperties = {
-    position: 'absolute',
-    left: pos.left,
-    top,
-    width,
-    height,
     background: bg,
     borderColor,
     borderLeftColor,
@@ -70,18 +68,21 @@ export function TimetableSetBlock({
   }
 
   const showToggle = width > 80 && height >= 28
-  const showRating = width > 120 && height >= 28
+  const showRating = set.is_music_set && width > 120 && height >= 28
   const showTime = height >= 48 && width > 56
   const leadImage = getLeadImage(set.set_artists)
-  const showImage = !imgError && !!leadImage && width > 110 && height >= 40
+  const showImage = set.is_music_set && !imgError && !!leadImage && width > 110 && height >= 40
+
+  const handleClick = () => { if (set.is_music_set) onOpenSheet(); else onReveal() }
 
   return (
+    <div style={{ position: 'absolute', left: pos.left, top, width, height }}>
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpenSheet}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenSheet() } }}
-      style={style}
+      onClick={handleClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
+      style={{ ...style, position: 'absolute', inset: 0 }}
       className={`absolute border rounded-[3px] px-2.5 overflow-hidden cursor-pointer ${isConflict ? 'pt-3 pb-1.5' : 'py-1.5'} ${isNow ? 'animate-pulse-glow' : ''}`}
     >
       {isConflict && (
@@ -169,6 +170,12 @@ export function TimetableSetBlock({
           )}
         </div>
       )}
+    </div>
+    {revealed && (
+      <span className="absolute left-1 top-1/2 -translate-y-1/2 z-40 px-2 py-1 bg-surface-raised border border-border font-mono font-bold text-xs uppercase text-text-primary whitespace-nowrap shadow-lg">
+        {set.artist_name}
+      </span>
+    )}
     </div>
   )
 }

@@ -3,6 +3,7 @@ import posthog from 'posthog-js'
 import type { SetWithStage, Stage } from '../../../types/database'
 import { getDayBounds, getHourTicks, hasValidTime, minutesToLabel, packLane, timeToMinutes } from '../../../lib/timetable'
 import { isNowPlaying } from '../../../hooks/useNowPlaying'
+import { useRevealTooltip } from '../../../hooks/useRevealTooltip'
 import { BottomSheet } from '../../common/BottomSheet'
 import { AuthPrompt } from '../../common/AuthPrompt'
 import { Button } from '../../ui/Button'
@@ -50,6 +51,7 @@ export function TimetableGrid({
 }: Props) {
   const [pxPerMin, setPxPerMin] = useState(2)
   const [authOpen, setAuthOpen] = useState(false)
+  const { revealedId, reveal } = useRevealTooltip()
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinch = useRef<{ dist: number; px: number } | null>(null)
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
@@ -205,15 +207,22 @@ export function TimetableGrid({
             <div style={{ height: RULER_H }} className="border-b border-lane-line" />
           )}
           {stages.map((stage, i) => (
-            <div
+            <button
               key={stage.id}
-              className="border-b border-lane-line flex items-center px-2"
+              type="button"
+              onClick={() => reveal(stage.id)}
+              className="relative border-b border-lane-line flex items-center px-2 w-full text-left"
               style={{ height: laneLayout.get(stage.id)?.height ?? BASE_LANE_H, marginBottom: i < stages.length - 1 ? LANE_GAP : 0 }}
             >
               <span className="font-mono font-bold text-sm uppercase text-text-secondary leading-tight line-clamp-2 break-words">
                 {stage.name}
               </span>
-            </div>
+              {revealedId === stage.id && (
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 z-40 px-2 py-1 bg-surface-raised border border-border font-mono font-bold text-xs uppercase text-text-primary whitespace-nowrap shadow-lg">
+                  {stage.name}
+                </span>
+              )}
+            </button>
           ))}
         </div>
 
@@ -281,6 +290,8 @@ export function TimetableGrid({
                   onToggleGoing={() => handleToggle(set.id)}
                   onRate={(v) => handleRate(set.id, v)}
                   onOpenSheet={() => onOpenSheet(set)}
+                  revealed={revealedId === set.id}
+                  onReveal={() => reveal(set.id)}
                 />
               )
             })}

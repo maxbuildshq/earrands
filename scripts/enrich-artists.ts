@@ -23,6 +23,7 @@ const resume = args.includes('--resume')
 const autoApply = args.includes('--auto-apply')
 const pollJobs = args.includes('--poll-jobs')
 const pollInterval = parseInt(args.find(a => a.startsWith('--poll-interval='))?.split('=')[1] ?? '30', 10)
+const searchKeywords = args.find(a => a.startsWith('--search-keywords='))?.split('=').slice(1).join('=') || undefined
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`Usage:
@@ -41,6 +42,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --auto-apply                       Write results directly to DB (no manual --apply step)
   npm run enrich -- --poll-jobs                        Poll enrichment_jobs table for pending jobs
   npm run enrich -- --poll-jobs --poll-interval=60     Custom poll interval (seconds, default: 30)
+  npm run enrich -- --search-keywords="drum & bass"   Append keywords to Brave search queries
 
 Fields: image, instagram, soundcloud, bandcamp, bio, location`)
   process.exit(0)
@@ -56,6 +58,7 @@ console.log('──────────────────────�
 if (dryRun) console.log(chalk.yellow('DRY RUN — no DB writes'))
 if (fresh) console.log(chalk.yellow('FRESH — ignoring existing field values'))
 if (fields) console.log(chalk.dim(`Fields: ${fields.join(', ')}`))
+if (searchKeywords) console.log(chalk.dim(`Search keywords: ${searchKeywords}`))
 if (limit) console.log(chalk.dim(`Limit: ${limit} artists`))
 if (resume) console.log(chalk.dim('Resuming from last progress'))
 console.log()
@@ -299,6 +302,7 @@ async function main() {
     festivalName,
     fields,
     dryRun,
+    searchKeywords,
     onProgress: (artist, step) => {
       process.stdout.write(`\r  ${chalk.dim(`[${step}]`)} ${artist}${''.padEnd(30)}`)
     },
@@ -486,6 +490,7 @@ async function pollJobsLoop() {
         if (job.artist_sort_names?.length) {
           jobArgs.push(`--artist=${job.artist_sort_names.join(',')}`)
         }
+        if (job.search_keywords) jobArgs.push(`--search-keywords=${job.search_keywords}`)
 
         // For parse_artists type, run parse-artists script instead
         if (job.type === 'parse_artists') {

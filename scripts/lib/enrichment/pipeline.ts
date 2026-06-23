@@ -20,6 +20,7 @@ export type PipelineConfig = {
   cloudflareApiToken?: string
   festivalName?: string
   fields?: EnrichmentField[]
+  searchKeywords?: string
   dryRun?: boolean
   onProgress?: (artist: string, step: string) => void
 }
@@ -77,7 +78,7 @@ export async function enrichArtist(
     if (hasBrave && needsField(fields, 'soundcloud') && !result.soundcloud_url) {
       config.onProgress?.(artist.name, 'Brave → SoundCloud')
       try {
-        const scUrl = await searchSoundCloud(artist.name, braveApiKey!)
+        const scUrl = await searchSoundCloud(artist.name, braveApiKey!, config.searchKeywords)
         if (scUrl) {
           result.soundcloud_url = scUrl
           result.sources.push('brave-search-sc')
@@ -93,7 +94,7 @@ export async function enrichArtist(
     if (hasBrave && needsField(fields, 'instagram') && !result.instagram_url) {
       config.onProgress?.(artist.name, 'Brave → Instagram')
       try {
-        const igUrl = await searchInstagram(artist.name, braveApiKey!)
+        const igUrl = await searchInstagram(artist.name, braveApiKey!, config.searchKeywords)
         if (igUrl) {
           instagramCandidates.push({ url: igUrl, source: 'brave-search-ig' })
         }
@@ -117,9 +118,23 @@ export async function enrichArtist(
           const discogs = await searchDiscogsArtist(artist.name, discogsKey!, discogsSecret!)
           if (discogs) {
             result.discogs_id = discogs.discogs_id
-            for (let i = 0; i < discogs.all_images.length; i++) {
-              imageCandidates.push({ url: discogs.all_images[i], source: i === 0 ? 'discogs-image' : `discogs-image-${i + 1}` })
+
+            // Discogs name search can match the wrong artist. Only trust its images when
+            // the Discogs page itself links out to a social profile — and that profile
+            // doesn't contradict a SoundCloud URL we already confirmed via Brave/the DB.
+            const discogsConflictsWithKnownSc = !!(
+              result.soundcloud_url && discogs.soundcloud_url &&
+              discogs.soundcloud_url !== result.soundcloud_url
+            )
+            const discogsHasCrossRef = !!(discogs.instagram_url || discogs.soundcloud_url)
+            if (discogsHasCrossRef && !discogsConflictsWithKnownSc) {
+              for (let i = 0; i < discogs.all_images.length; i++) {
+                imageCandidates.push({ url: discogs.all_images[i], source: i === 0 ? 'discogs-image' : `discogs-image-${i + 1}` })
+              }
+            } else if (discogs.all_images.length > 0) {
+              result.review_notes.push('Discogs images skipped: no verified cross-reference to a known social profile')
             }
+
             if (!result.bandcamp_url && discogs.bandcamp_url) {
               result.bandcamp_url = normalizeBandcampUrl(discogs.bandcamp_url)
               result.sources.push('discogs-bandcamp')
@@ -157,7 +172,9 @@ export async function enrichArtist(
         const profile = await scrapeSoundCloudProfile(result.soundcloud_url)
         if (profile) {
           if (profile.image_url) {
-            imageCandidates.push({ url: profile.image_url, source: 'soundcloud-image' })
+            // Unshift so SoundCloud's self-uploaded avatar is scored first — lets the
+            // scorer's early-exit trust it before considering less reliable Discogs images.
+            imageCandidates.unshift({ url: profile.image_url, source: 'soundcloud-image' })
           }
           if (profile.instagram_url) {
             instagramCandidates.push({ url: profile.instagram_url, source: 'soundcloud-instagram' })
@@ -262,7 +279,7 @@ export async function enrichArtist(
 
     try {
       await sleep(300)
-      const webSources = await searchArtistBio(artist.name, braveApiKey!)
+      const webSources = await searchArtistBio(artist.name, braveApiKey!, true, config.searchKeywords)
       bioResearch.web_sources = webSources
     } catch (err: any) {
       if (err.message?.includes('rate limit')) throw err

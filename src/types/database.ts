@@ -26,6 +26,7 @@ export type FestivalSet = {
   start_time: string | null
   end_time: string | null
   is_live: boolean
+  is_music_set: boolean
 }
 
 export type SetArtistWithBio = {
@@ -142,6 +143,7 @@ export type EnrichmentJob = {
   festival_slug: string | null
   artist_sort_names: string[] | null
   fields: string[] | null
+  search_keywords: string | null
   created_at: string
   started_at: string | null
   completed_at: string | null

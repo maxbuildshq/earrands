@@ -1,6 +1,9 @@
-export function buildSearchQuery(artistName: string, site: string): string {
+export function buildSearchQuery(artistName: string, site: string, keywords?: string | null): string {
   const cleaned = cleanArtistName(artistName)
-  return `"${cleaned}" dj music site:${site}`
+  const kw = keywords?.trim()
+  return kw
+    ? `"${cleaned}" ${kw} dj music site:${site}`
+    : `"${cleaned}" dj music site:${site}`
 }
 
 export function cleanArtistName(name: string): string {
