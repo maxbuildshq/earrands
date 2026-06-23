@@ -14,7 +14,8 @@
     "parse-artists": "tsx --env-file=.env.local scripts/parse-artists.ts",
     "ingest": "tsx --env-file=.env.local scripts/ingest.ts",
     "notify": "tsx --env-file=.env.local scripts/notify.ts",
-    "enrich": "tsx --env-file=.env.local scripts/enrich-artists.ts"
+    "enrich": "tsx --env-file=.env.local scripts/enrich-artists.ts",
+    "import-extras": "tsx --env-file=.env.local scripts/import-festival-extras.ts"
   },
   "dependencies": {
     "@fontsource/barlow-condensed": "^5.2.8",
