@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     if (!festival) return json({ error: 'Festival not found' }, 404)
 
     const baseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://earrands.app/app'
-    const scheduleUrl = `${baseUrl}/${festival_slug ?? festival.slug}`
+    const scheduleUrl = `${baseUrl}/festivals/${festival_slug ?? festival.slug}/schedule`
 
     const subject = buildSubject(festival.name, type)
     const html = buildEmailHtml(festival.name, scheduleUrl, type)
