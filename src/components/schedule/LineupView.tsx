@@ -39,10 +39,10 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
 
       <div className="space-y-1">
         <div className="flex items-center gap-3 mb-4">
-          <span className="font-mono text-xs text-text-secondary uppercase tracking-wider">
+          <span className="font-mono text-sm text-text-secondary uppercase tracking-wider">
             {daySets.length} artists
           </span>
-          <span className="font-mono text-xs text-accent/70 uppercase tracking-wider">
+          <span className="font-mono text-sm text-accent/70 uppercase tracking-wider">
             Timetable TBA
           </span>
         </div>
@@ -67,7 +67,7 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
                     loading="lazy"
                   />
                 )}
-                <span className="font-mono font-bold text-sm text-text-primary truncate">
+                <span className="font-mono font-bold text-base text-text-primary truncate">
                   {set.artist_name}
                 </span>
                 {set.is_live && (

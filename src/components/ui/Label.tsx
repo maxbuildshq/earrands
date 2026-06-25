@@ -5,7 +5,7 @@ type Props = LabelHTMLAttributes<HTMLLabelElement>
 export function Label({ className = '', ...props }: Props) {
   return (
     <label
-      className={`block font-mono text-text-secondary text-sm mb-1 uppercase tracking-wider ${className}`.trim()}
+      className={`block font-mono text-text-secondary text-base mb-1 uppercase tracking-wider ${className}`.trim()}
       {...props}
     />
   )

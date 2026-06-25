@@ -190,15 +190,27 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose,
             <ArtistImage url={heroImage} name={set.artist_name} size={150} />
           </button>
         )}
-        {!heroImage && resolvedArtists.length > 1 && resolvedArtists.some(a => a.image_url) && (
-          <div className="flex shrink-0">
-            {resolvedArtists.filter(a => a.image_url).map((a, i) => (
-              <button key={a.name} className={i > 0 ? '-ml-3' : ''} style={{ zIndex: resolvedArtists.length - i }} onClick={() => setLightboxImage({ src: a.image_url!, alt: a.name })}>
-                <ArtistImage url={a.image_url!} name={a.name} size={100} />
-              </button>
-            ))}
-          </div>
-        )}
+        {!heroImage && resolvedArtists.length > 1 && resolvedArtists.some(a => a.image_url) && (() => {
+          const PER_ROW = 3
+          const withImages = resolvedArtists.filter(a => a.image_url)
+          const imageSize = withImages.length <= 2 ? 100 : 64
+          const overlap = imageSize * 0.132
+          const rows: typeof withImages[] = []
+          for (let i = 0; i < withImages.length; i += PER_ROW) rows.push(withImages.slice(i, i + PER_ROW))
+          return (
+            <div className="flex flex-col gap-1 shrink-0">
+              {rows.map((row, ri) => (
+                <div key={ri} className="flex">
+                  {row.map((a, i) => (
+                    <button key={a.name} style={{ zIndex: row.length - i, marginLeft: i > 0 ? -overlap : 0 }} onClick={() => setLightboxImage({ src: a.image_url!, alt: a.name })}>
+                      <ArtistImage url={a.image_url!} name={a.name} size={imageSize} />
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         {/* Title block */}
         <div className="min-w-0 flex-1">
@@ -235,7 +247,7 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose,
 
       {clashes && clashes.length > 0 && (
         <div className="mx-4 mt-2 border-l-4 border-conflict bg-conflict/10 px-3 py-2">
-          <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-conflict mb-1">
+          <div className="font-mono text-xs font-bold uppercase tracking-wider text-conflict mb-1">
             Clashes with {clashes.length} on your list
           </div>
           <div className="space-y-0.5">

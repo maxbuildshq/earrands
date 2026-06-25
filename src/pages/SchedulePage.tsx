@@ -201,12 +201,12 @@ export function SchedulePage() {
   return (
     <div className="pt-4">
       {/* Control row: All/Picks group · Share · spacer · (list-mode Stages) · Timetable/List group */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex border border-border">
           <Button variant="segment" active={!picksOnly} fullWidth={false} onClick={() => choosePicks(false)} className="px-3 py-2">
             All
           </Button>
-          <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border">
+          <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border whitespace-nowrap">
             Picks ({picksCount})
           </Button>
         </div>
@@ -218,7 +218,7 @@ export function SchedulePage() {
             onClick={() => setShareOpen(true)}
             title="Share"
             aria-label="Share"
-            className="shrink-0 !p-0 !px-2.5 !py-2 flex items-center justify-center"
+            className="shrink-0 !w-8 !h-8 !p-0 flex items-center justify-center"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3v12" />
@@ -227,8 +227,6 @@ export function SchedulePage() {
             </svg>
           </Button>
         )}
-
-        <div className="flex-1" />
 
         {layoutMode === 'list' && (
           <Button
@@ -246,17 +244,17 @@ export function SchedulePage() {
           </Button>
         )}
 
-        <div className="flex border border-border">
+        <div className="flex">
           {(['timetable', 'list'] as const).map((m, i) => (
             <Button
               key={m}
-              variant="segment"
+              variant="icon-toggle"
               active={layoutMode === m}
               fullWidth={false}
               onClick={() => chooseLayout(m)}
               title={m === 'timetable' ? 'Timetable' : 'List'}
               aria-label={m}
-              className={`px-2.5 py-2 flex items-center justify-center ${i > 0 ? 'border-l border-border' : ''}`}
+              className={i > 0 ? '-ml-px' : ''}
             >
               {m === 'timetable' ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

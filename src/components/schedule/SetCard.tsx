@@ -71,27 +71,19 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
               </Heading>
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-text-secondary">
+            <div className="text-base text-text-secondary space-y-0.5">
               {set.start_time && set.end_time && (
-                <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
+                <div className="flex items-center gap-2">
+                  <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
+                  {showConflict && !isNow && <Badge variant="conflict">Clash</Badge>}
+                </div>
               )}
-              {set.stages && set.start_time && (
-                <span className="text-border">·</span>
-              )}
-              {set.stages && (
-                <span>{set.stages.name}</span>
-              )}
-              {set.is_live && (
-                <>
-                  <span className="text-border">·</span>
-                  <Badge variant="live" className="text-white">Live</Badge>
-                </>
-              )}
-              {showConflict && !isNow && (
-                <>
-                  <span className="text-border">·</span>
-                  <Badge variant="conflict">Clash</Badge>
-                </>
+              {(set.stages || set.is_live) && (
+                <div className="flex items-center gap-2">
+                  {set.stages && <span>{set.stages.name}</span>}
+                  {set.stages && set.is_live && <span className="text-border">·</span>}
+                  {set.is_live && <Badge variant="live" className="text-white">Live</Badge>}
+                </div>
               )}
             </div>
           </div>

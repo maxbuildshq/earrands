@@ -58,7 +58,7 @@ export function LoginPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-text-secondary text-sm text-center font-mono">
+        <p className="mt-6 text-text-secondary text-base text-center font-mono">
           No account?{' '}
           <Link to="/signup" className="text-accent font-bold uppercase tracking-wider hover:text-accent-dim transition-colors">Sign up</Link>
         </p>
