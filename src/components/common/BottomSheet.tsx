@@ -16,9 +16,12 @@ type Props = {
 export function BottomSheet({ title, headerContent, onClose, children }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
   const backdropRef = useRef<HTMLDivElement>(null)
+  const handleAreaRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const touchStartY = useRef(0)
   const touchCurrentY = useRef(0)
   const isDragging = useRef(false)
+  const touchInHandle = useRef(false)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -40,12 +43,15 @@ export function BottomSheet({ title, headerContent, onClose, children }: Props) 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartY.current = e.touches[0].clientY
     isDragging.current = false
+    const handleEl = handleAreaRef.current
+    touchInHandle.current = !!handleEl && e.touches[0].clientY <= handleEl.getBoundingClientRect().bottom
   }, [])
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     touchCurrentY.current = e.touches[0].clientY
     const delta = touchCurrentY.current - touchStartY.current
-    if (delta > 0) {
+    const contentAtTop = !contentRef.current || contentRef.current.scrollTop <= 0
+    if (delta > 0 && (touchInHandle.current || contentAtTop)) {
       isDragging.current = true
       if (sheetRef.current) {
         sheetRef.current.style.transform = `translateY(${delta}px)`
@@ -80,7 +86,7 @@ export function BottomSheet({ title, headerContent, onClose, children }: Props) 
         className="absolute bottom-0 left-0 right-0 max-h-[85vh] bg-surface-raised border-t border-border animate-slide-up overflow-hidden flex flex-col"
       >
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
+        <div ref={handleAreaRef} className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 bg-border rounded-full" />
         </div>
 
@@ -101,7 +107,7 @@ export function BottomSheet({ title, headerContent, onClose, children }: Props) 
           </Button>
         </div>
 
-        <div className="overflow-y-auto flex-1 min-h-0">
+        <div ref={contentRef} className="overflow-y-auto flex-1 min-h-0">
           {children}
         </div>
       </div>

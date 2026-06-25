@@ -1,13 +1,7 @@
-import { useState, type CSSProperties } from 'react'
-import type { SetWithStage, SetArtistWithBio } from '../../../types/database'
+import type { CSSProperties } from 'react'
+import type { SetWithStage } from '../../../types/database'
 import { Badge } from '../../ui/Badge'
 import { setPosition, type DayBounds } from '../../../lib/timetable'
-
-function getLeadImage(artists: SetArtistWithBio[] | null): string | null {
-  if (!artists || artists.length === 0) return null
-  const sorted = [...artists].sort((a, b) => a.billing_order - b.billing_order)
-  return sorted[0].artists.image_url
-}
 
 type Props = {
   set: SetWithStage
@@ -36,7 +30,6 @@ export function TimetableSetBlock({
   isNow, isGoing, rating, isConflict, isPast, endsInMin, onToggleGoing, onRate, onOpenSheet,
   revealed, onReveal,
 }: Props) {
-  const [imgError, setImgError] = useState(false)
   const pos = setPosition(set, bounds, pxPerMin)
   if (!pos) return null
 
@@ -70,8 +63,6 @@ export function TimetableSetBlock({
   const showToggle = width > 80 && height >= 28
   const showRating = set.is_music_set && width > 120 && height >= 28
   const showTime = height >= 48 && width > 56
-  const leadImage = getLeadImage(set.set_artists)
-  const showImage = set.is_music_set && !imgError && !!leadImage && width > 110 && height >= 40
 
   const handleClick = () => { if (set.is_music_set) onOpenSheet(); else onReveal() }
 
@@ -93,15 +84,6 @@ export function TimetableSetBlock({
       )}
 
       <div className={`flex items-center gap-1.5 min-w-0 ${showRating ? 'pr-16' : showToggle ? 'pr-6' : ''}`}>
-        {showImage && (
-          <img
-            src={leadImage!}
-            alt=""
-            className="w-5 h-5 rounded-full object-cover border border-border shrink-0"
-            onError={() => setImgError(true)}
-            loading="lazy"
-          />
-        )}
         <div className={`font-mono font-bold text-base truncate leading-tight min-w-0 ${isNow ? 'text-white' : 'text-text-primary'}`}>
           {set.artist_name}
         </div>

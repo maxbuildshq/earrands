@@ -14,6 +14,7 @@ type Props = {
   onRate: (value: -1 | 1) => void
   onClose: () => void
   clashes?: SetWithStage[]
+  showRating?: boolean
 }
 
 function formatTime(time: string) {
@@ -171,7 +172,7 @@ function SoundCloudEmbed({ embedUrl }: { embedUrl: string }) {
   )
 }
 
-export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose, clashes }: Props) {
+export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose, clashes, showRating = true }: Props) {
   const [lightboxImage, setLightboxImage] = useState<{ src: string; alt: string } | null>(null)
 
   const { comboBio, artists: resolvedArtists } = resolveArtists(set)
@@ -204,21 +205,16 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose,
           <Heading variant="card" className="text-xl leading-tight">
             {set.artist_name}
           </Heading>
-          <div className="flex items-center gap-2 mt-1 text-base text-text-secondary">
+          <div className="mt-1 text-base text-text-secondary space-y-0.5">
             {set.start_time && set.end_time && (
-              <span>{formatTime(set.start_time)} – {formatTime(set.end_time)}</span>
+              <div>{formatTime(set.start_time)} – {formatTime(set.end_time)}</div>
             )}
-            {set.stages && set.start_time && (
-              <span className="text-border">·</span>
-            )}
-            {set.stages && (
-              <span>{set.stages.name}</span>
-            )}
-            {set.is_live && (
-              <>
-                <span className="text-border">·</span>
-                <Badge variant="live" className="text-white">Live</Badge>
-              </>
+            {(set.stages || set.is_live) && (
+              <div className="flex items-center gap-2">
+                {set.stages && <span>{set.stages.name}</span>}
+                {set.stages && set.is_live && <span className="text-border">·</span>}
+                {set.is_live && <Badge variant="live" className="text-white">Live</Badge>}
+              </div>
             )}
           </div>
         </div>
@@ -231,10 +227,10 @@ export function SetSheet({ set, isGoing, rating, onToggleGoing, onRate, onClose,
     <BottomSheet onClose={onClose} headerContent={headerContent}>
       {/* Social links + action buttons — padded like all other content */}
       <div className="flex items-center justify-between gap-2 px-4 pt-2 pb-1">
-        {resolvedArtists.length === 1 ? (
-          <SocialLinks artist={resolvedArtists[0]} />
-        ) : <div />}
-        <SetActions isGoing={isGoing} rating={rating} onToggleGoing={onToggleGoing} onRate={onRate} />
+        <div>
+          {resolvedArtists.length === 1 && <SocialLinks artist={resolvedArtists[0]} />}
+        </div>
+        <SetActions isGoing={isGoing} rating={rating} onToggleGoing={onToggleGoing} onRate={onRate} showRating={showRating} />
       </div>
 
       {clashes && clashes.length > 0 && (
