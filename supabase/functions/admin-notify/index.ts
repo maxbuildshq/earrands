@@ -52,7 +52,7 @@ function buildEmailHtml(festivalName: string, scheduleUrl: string, type: EmailTy
     ? 'You asked us to let you know — here it is.'
     : 'You asked for it, we added it.'
   const unsubNote = type === 'follow'
-    ? `You're getting this because you followed ${festivalName} on earrands. To stop these, unfollow it in the app.`
+    ? `You're getting this because you followed ${festivalName} on earrands.`
     : `You're getting this because you requested ${festivalName} on earrands.`
 
   return `<div style="font-family:'Space Mono',monospace;background:#0A0A0A;color:#E5E5E5;padding:24px;">
@@ -69,7 +69,7 @@ function buildEmailText(festivalName: string, scheduleUrl: string, type: EmailTy
     ? 'You asked us to let you know — here it is.'
     : 'You asked for it, we added it.'
   const unsubNote = type === 'follow'
-    ? `You're getting this because you followed ${festivalName} on earrands. To stop these, unfollow it in the app.`
+    ? `You're getting this because you followed ${festivalName} on earrands.`
     : `You're getting this because you requested ${festivalName} on earrands.`
   return `${festivalName} — ${subline}\n\n${scheduleUrl}\n\n${unsubNote}`
 }
