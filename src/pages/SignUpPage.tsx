@@ -48,7 +48,7 @@ export function SignUpPage() {
             We sent a confirmation link to <span className="text-text-primary">{email}</span>.
             Click it to activate your account.
           </p>
-          <Link to="/login" className="text-accent font-mono font-bold text-sm uppercase tracking-wider hover:text-accent-dim transition-colors">BACK TO LOGIN</Link>
+          <Link to="/login" className="text-accent font-mono font-bold text-base uppercase tracking-wider hover:text-accent-dim transition-colors">BACK TO LOGIN</Link>
         </div>
       </div>
     )
@@ -82,7 +82,7 @@ export function SignUpPage() {
               onChange={e => setMarketing(e.target.checked)}
               className="mt-0.5 w-4 h-4 shrink-0 accent-accent"
             />
-            <span className="text-text-secondary text-xs leading-relaxed">
+            <span className="text-text-secondary text-sm leading-relaxed">
               Email me occasional updates worth reading — new festivals and major features. No spam, unsubscribe anytime.
             </span>
           </label>
@@ -94,7 +94,7 @@ export function SignUpPage() {
           </Button>
         </form>
 
-        <p className="mt-6 text-text-secondary text-sm text-center font-mono">
+        <p className="mt-6 text-text-secondary text-base text-center font-mono">
           Already have an account?{' '}
           <Link to="/login" className="text-accent font-bold uppercase tracking-wider hover:text-accent-dim transition-colors">Log in</Link>
         </p>

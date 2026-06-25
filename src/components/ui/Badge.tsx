@@ -6,7 +6,7 @@ type Props = HTMLAttributes<HTMLSpanElement> & {
   variant: Variant
 }
 
-const BASE = 'inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase leading-none'
+const BASE = 'inline-flex items-center px-1.5 py-0.5 text-xs font-mono font-bold uppercase leading-none'
 
 const VARIANTS: Record<Variant, string> = {
   live: 'bg-live text-white',

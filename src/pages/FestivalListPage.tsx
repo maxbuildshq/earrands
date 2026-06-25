@@ -87,7 +87,7 @@ function FestivalCard({ festival }: { festival: Festival }) {
         <div className="flex items-start justify-between gap-3">
           <div>
             <Heading variant="card">{festival.name}</Heading>
-            <div className="flex items-center gap-2 mt-1 text-sm text-text-secondary">
+            <div className="flex items-center gap-2 mt-1 text-base text-text-secondary">
               <span>{formatDateRange(festival.start_date, festival.end_date)}</span>
               {festival.location && (
                 <>
@@ -111,7 +111,7 @@ function FestivalCard({ festival }: { festival: Festival }) {
 
       {showFollow && (
         <div className="border-t border-border px-4 py-2 flex items-center justify-between gap-3">
-          <span className="font-mono text-xs text-text-secondary uppercase tracking-wider">Timetable not out yet</span>
+          <span className="font-mono text-sm text-text-secondary uppercase tracking-wider">Timetable not out yet</span>
           <FollowButton festivalId={festival.id} />
         </div>
       )}

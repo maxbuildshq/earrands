@@ -51,8 +51,10 @@ export function TimetableGrid({
 }: Props) {
   const [pxPerMin, setPxPerMin] = useState(2)
   const [authOpen, setAuthOpen] = useState(false)
+  const [isPinching, setIsPinching] = useState(false)
   const { revealedId, reveal } = useRevealTooltip()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const rulerScrollRef = useRef<HTMLDivElement>(null)
   const pinch = useRef<{ dist: number; px: number } | null>(null)
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map())
   // Focal point to keep stable across a zoom (so the grid zooms under the cursor / pinch centre).
@@ -110,6 +112,7 @@ export function TimetableGrid({
     const el = scrollRef.current
     if (!el || !bounds) return
     el.scrollLeft = nowLeft != null ? Math.max(0, nowLeft - 100) : 0
+    if (rulerScrollRef.current) rulerScrollRef.current.scrollLeft = el.scrollLeft
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDay, bounds != null])
 
@@ -119,8 +122,14 @@ export function TimetableGrid({
     const a = zoomAnchor.current
     if (!el || !a) return
     el.scrollLeft = a.contentX * (pxPerMin / a.oldPx) - a.offset
+    if (rulerScrollRef.current) rulerScrollRef.current.scrollLeft = el.scrollLeft
     zoomAnchor.current = null
   }, [pxPerMin])
+
+  // Keep the frozen ruler in sync with horizontal scroll of the lanes body.
+  function onLanesScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (rulerScrollRef.current) rulerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft
+  }
 
   // Report zoom level once it settles (debounced) — avoids an event per gesture step.
   const zoomReported = useRef(false)
@@ -148,8 +157,11 @@ export function TimetableGrid({
   }
 
   // Pinch-to-zoom on the time axis, anchored to the pinch centre.
+  // touch-action is relaxed to "none" while pinching so the browser doesn't consume the
+  // vertical component of a diagonal/vertical pinch for its own horizontal-scroll handling.
   function onPointerDown(e: React.PointerEvent) {
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size >= 2) setIsPinching(true)
   }
   function onPointerMove(e: React.PointerEvent) {
     if (!pointers.current.has(e.pointerId)) return
@@ -164,7 +176,7 @@ export function TimetableGrid({
   }
   function onPointerUp(e: React.PointerEvent) {
     pointers.current.delete(e.pointerId)
-    if (pointers.current.size < 2) pinch.current = null
+    if (pointers.current.size < 2) { pinch.current = null; setIsPinching(false) }
   }
   function onWheel(e: React.WheelEvent) {
     if (!e.ctrlKey) return
@@ -186,26 +198,51 @@ export function TimetableGrid({
   return (
     <>
       <div className="relative">
-      <div className="flex border-t border-lane-line select-none">
+      <div className="border-t border-lane-line select-none">
+        {/* Frozen header row: stages button + time ruler. Stays visible while the lanes below scroll. */}
+        <div className="sticky z-20 bg-surface flex" style={{ top: 'var(--header-height, calc(env(safe-area-inset-top) + 85px))' }}>
+          <div className="shrink-0 bg-surface" style={{ width: LABEL_W }}>
+            {onOpenStages ? (
+              <Button
+                variant="segment"
+                fullWidth={false}
+                onClick={onOpenStages}
+                title="Stages"
+                aria-label="Stages"
+                style={{ height: RULER_H }}
+                className="w-full border-b border-lane-line flex items-center gap-1 px-2"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+                {stageCount}/{totalStages}
+              </Button>
+            ) : (
+              <div style={{ height: RULER_H }} className="border-b border-lane-line" />
+            )}
+          </div>
+          <div ref={rulerScrollRef} className="flex-1 overflow-hidden relative">
+            <div className="relative border-b border-lane-line" style={{ width: W, height: RULER_H }}>
+              {getHourTicks(bounds).map(t => {
+                const left = (t - bounds.startMin) * pxPerMin
+                if (left > W) return null
+                return (
+                  <div key={t} className="absolute top-0 h-full flex items-center pl-1 font-mono text-base text-text-secondary/70 border-l border-grid-line" style={{ left }}>
+                    {minutesToLabel(t)}
+                  </div>
+                )
+              })}
+              {nowLeft != null && (
+                <Badge variant="accent" className="absolute top-1 -translate-x-1/2 rounded-[3px] z-30" style={{ left: nowLeft }}>
+                  NOW {amsterdamHM(now)}
+                </Badge>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex">
         <div className="shrink-0 bg-surface" style={{ width: LABEL_W }}>
-          {onOpenStages ? (
-            <Button
-              variant="segment"
-              fullWidth={false}
-              onClick={onOpenStages}
-              title="Stages"
-              aria-label="Stages"
-              style={{ height: RULER_H }}
-              className="w-full border-b border-lane-line flex items-center gap-1 px-2"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-              {stageCount}/{totalStages}
-            </Button>
-          ) : (
-            <div style={{ height: RULER_H }} className="border-b border-lane-line" />
-          )}
           {stages.map((stage, i) => (
             <button
               key={stage.id}
@@ -214,7 +251,7 @@ export function TimetableGrid({
               className="relative border-b border-lane-line flex items-center px-2 w-full text-left"
               style={{ height: laneLayout.get(stage.id)?.height ?? BASE_LANE_H, marginBottom: i < stages.length - 1 ? LANE_GAP : 0 }}
             >
-              <span className="font-mono font-bold text-sm uppercase text-text-secondary leading-tight line-clamp-2 break-words">
+              <span className="font-mono font-bold text-base uppercase text-text-secondary leading-tight line-clamp-2 break-words">
                 {stage.name}
               </span>
               {revealedId === stage.id && (
@@ -230,29 +267,14 @@ export function TimetableGrid({
           ref={scrollRef}
           data-swipe-back="exclude"
           className="flex-1 overflow-x-auto overflow-y-hidden relative"
+          style={{ touchAction: isPinching ? 'none' : 'pan-x' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           onWheel={onWheel}
+          onScroll={onLanesScroll}
         >
-          <div className="relative border-b border-lane-line" style={{ width: W, height: RULER_H }}>
-            {getHourTicks(bounds).map(t => {
-              const left = (t - bounds.startMin) * pxPerMin
-              if (left > W) return null
-              return (
-                <div key={t} className="absolute top-0 h-full flex items-center pl-1 font-mono text-sm text-text-secondary/70 border-l border-grid-line" style={{ left }}>
-                  {minutesToLabel(t)}
-                </div>
-              )
-            })}
-            {nowLeft != null && (
-              <Badge variant="accent" className="absolute top-1 -translate-x-1/2 rounded-[3px] z-30" style={{ left: nowLeft }}>
-                NOW {amsterdamHM(now)}
-              </Badge>
-            )}
-          </div>
-
           <div className="relative" style={{ width: W, height: lanesHeight }}>
             {stages.map(stage => {
               const ll = laneLayout.get(stage.id)
@@ -298,6 +320,7 @@ export function TimetableGrid({
 
             {nowLeft != null && <NowCursor left={nowLeft} height={lanesHeight} />}
           </div>
+        </div>
         </div>
       </div>
 

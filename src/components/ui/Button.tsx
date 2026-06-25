@@ -18,10 +18,10 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   fullWidth?: boolean
 }
 
-const BASE_FULL = 'font-mono font-bold text-sm uppercase tracking-wider py-2.5 px-4 transition-colors disabled:opacity-50'
+const BASE_FULL = 'font-mono font-bold text-base uppercase tracking-wider py-2.5 px-4 transition-colors disabled:opacity-50'
 const BASE_ICON = 'w-8 h-8 flex items-center justify-center border transition-colors'
-const BASE_SEGMENT = 'font-mono font-bold text-xs uppercase tracking-wider transition-colors'
-const BASE_CHOICE = 'font-mono font-bold text-xs uppercase tracking-wider border transition-colors'
+const BASE_SEGMENT = 'font-mono font-bold text-sm uppercase tracking-wider transition-colors'
+const BASE_CHOICE = 'font-mono font-bold text-sm uppercase tracking-wider border transition-colors'
 
 // Exported so non-button elements (e.g. Link) can apply the same class string.
 export const ICON_BARE_CLASS = 'w-8 h-8 flex items-center justify-center text-text-secondary hover:text-accent transition-colors'

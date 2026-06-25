@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react'
 import type { SetWithStage } from '../../../types/database'
-import { Badge } from '../../ui/Badge'
 import { setPosition, type DayBounds } from '../../../lib/timetable'
 
 type Props = {
@@ -61,7 +60,8 @@ export function TimetableSetBlock({
   }
 
   const showToggle = width > 80 && height >= 28
-  const showRating = set.is_music_set && width > 120 && height >= 28
+  // Rating buttons stack vertically alongside the toggle, so they need more lane height to fit.
+  const showRating = set.is_music_set && width > 80 && height >= 64
   const showTime = height >= 48 && width > 56
 
   const handleClick = () => { if (set.is_music_set) onOpenSheet(); else onReveal() }
@@ -74,7 +74,7 @@ export function TimetableSetBlock({
       onClick={handleClick}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
       style={{ ...style, position: 'absolute', inset: 0 }}
-      className={`absolute border rounded-[3px] px-2.5 overflow-hidden cursor-pointer ${isConflict ? 'pt-3 pb-1.5' : 'py-1.5'} ${isNow ? 'animate-pulse-glow' : ''}`}
+      className={`absolute border rounded-[3px] px-2.5 overflow-hidden cursor-pointer ${isConflict ? 'pt-2 pb-1' : 'py-1.5'} ${isNow ? 'animate-pulse-glow' : ''}`}
     >
       {isConflict && (
         <div
@@ -83,7 +83,7 @@ export function TimetableSetBlock({
         />
       )}
 
-      <div className={`flex items-center gap-1.5 min-w-0 ${showRating ? 'pr-16' : showToggle ? 'pr-6' : ''}`}>
+      <div className={`flex items-center gap-1.5 min-w-0 ${showToggle ? 'pr-7' : ''}`}>
         <div className={`font-mono font-bold text-base truncate leading-tight min-w-0 ${isNow ? 'text-white' : 'text-text-primary'}`}>
           {set.artist_name}
         </div>
@@ -94,16 +94,12 @@ export function TimetableSetBlock({
         </div>
       )}
       {isNow && endsInMin != null && endsInMin > 0 && (
-        <div className="font-mono text-[10px] font-bold mt-0.5 text-accent">
+        <div className="font-mono text-xs font-bold mt-0.5 text-accent">
           ENDS IN {endsInMin} MIN
         </div>
       )}
-      {isConflict && width > 70 && (
-        <Badge variant="conflict" className="absolute bottom-1 right-1.5">Clash</Badge>
-      )}
-
       {showToggle && (
-        <div className={`absolute ${isConflict ? 'top-3' : 'top-1.5'} right-1.5 flex items-center gap-px`} onClick={e => e.stopPropagation()}>
+        <div className={`absolute ${isConflict ? 'top-2' : 'top-1'} right-0.5 flex flex-col items-center gap-0.5`} onClick={e => e.stopPropagation()}>
           <button
             onClick={onToggleGoing}
             title={isGoing ? 'Remove from my sets' : 'Add to my sets'}

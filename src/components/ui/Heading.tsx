@@ -10,12 +10,12 @@ type Props = HTMLAttributes<HTMLHeadingElement> & {
 const BASE = 'font-mono font-bold'
 
 const VARIANTS: Record<Variant, string> = {
-  page: `${BASE} text-2xl text-accent tracking-tight`,
-  content: `${BASE} text-lg text-accent tracking-tight`,
-  section: `${BASE} text-xs uppercase tracking-widest`,
-  sheet: `${BASE} text-lg text-text-primary leading-tight`,
+  page: `${BASE} text-3xl text-accent tracking-tight`,
+  content: `${BASE} text-xl text-accent tracking-tight`,
+  section: `${BASE} text-sm uppercase tracking-widest`,
+  sheet: `${BASE} text-xl text-text-primary leading-tight`,
   // Card/list item titles (artist name, festival name). Override color via className when needed.
-  card: `${BASE} text-base text-text-primary`,
+  card: `${BASE} text-lg text-text-primary`,
 }
 
 const DEFAULT_TAG: Record<Variant, ElementType> = {
