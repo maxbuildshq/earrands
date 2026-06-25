@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useFestivals } from '../hooks/useFestivalData'
 import type { Festival } from '../types/database'
@@ -24,6 +25,7 @@ function isPast(festival: Festival): boolean {
 
 export function FestivalListPage() {
   const { data: festivals = [], isLoading } = useFestivals()
+  const [showPast, setShowPast] = useState(false)
 
   const upcoming = festivals.filter(f => !isPast(f))
   const past = festivals.filter(f => isPast(f))
@@ -53,12 +55,18 @@ export function FestivalListPage() {
 
       {past.length > 0 && (
         <section>
-          <Heading variant="section" className="text-text-secondary mb-3">Past</Heading>
-          <div className="space-y-3">
-            {past.map(f => (
-              <FestivalCard key={f.id} festival={f} />
-            ))}
-          </div>
+          <button onClick={() => setShowPast(p => !p)} className="block mb-3">
+            <Heading as="span" variant="section" className="text-text-secondary hover:text-accent transition-colors">
+              {showPast ? `Collapse past (${past.length})` : `Show past (${past.length})`}
+            </Heading>
+          </button>
+          {showPast && (
+            <div className="space-y-3">
+              {past.map(f => (
+                <FestivalCard key={f.id} festival={f} />
+              ))}
+            </div>
+          )}
         </section>
       )}
     </div>
