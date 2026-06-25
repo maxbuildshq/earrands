@@ -119,15 +119,16 @@ async function main() {
     console.log(`\n   Collectives: ${collectives.map(c => c.name).join(', ')}`)
   }
 
+  console.log('\n📊 Multi-artist sets:')
+  sets.forEach(set => {
+    const result = parseArtistName(set.artist_name)
+    if (result.role !== 'solo' || result.collective) {
+      const parts = result.collective ? [`[${result.collective}]`, ...result.members] : result.members
+      console.log(`   "${set.artist_name}" → ${parts.join(` ‹${result.role}› `)}`)
+    }
+  })
+
   if (dryRun) {
-    console.log('\n📊 Dry-run sample (first 10 sets):')
-    sets.slice(0, 10).forEach(set => {
-      const result = parseArtistName(set.artist_name)
-      if (result.role !== 'solo' || result.collective) {
-        const parts = result.collective ? [`[${result.collective}]`, ...result.members] : result.members
-        console.log(`   "${set.artist_name}" → ${parts.join(` ‹${result.role}› `)}`)
-      }
-    })
     console.log('\n✅ Dry run complete — run without --dry-run to write to DB')
     return
   }
