@@ -267,7 +267,7 @@ export function TimetableGrid({
           ref={scrollRef}
           data-swipe-back="exclude"
           className="flex-1 overflow-x-auto overflow-y-hidden relative"
-          style={{ touchAction: isPinching ? 'none' : 'pan-x' }}
+          style={{ touchAction: isPinching ? 'none' : 'auto' }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
