@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
 
     // Send via Resend
     const resendKey = Deno.env.get('RESEND_API_KEY')
-    const fromEmail = Deno.env.get('NOTIFY_FROM_EMAIL') ?? 'earrands <hi@earrands.app>'
+    const fromEmail = Deno.env.get('NOTIFY_FROM_EMAIL') ?? 'earrands <noreply@earrands.app>'
     if (!resendKey) return json({ error: 'RESEND_API_KEY not configured' }, 500)
 
     let sent = 0

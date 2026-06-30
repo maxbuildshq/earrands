@@ -48,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/app`,
         data: {
           marketing_consent: marketingConsent,
           marketing_consent_at: marketingConsent ? new Date().toISOString() : null,
