@@ -200,79 +200,83 @@ export function SchedulePage() {
 
   return (
     <div className="pt-4">
-      {/* Control row: All/Picks group · Share · spacer · (list-mode Stages) · Timetable/List group */}
+      {/* Control row: left cluster (All/Picks + Share) · right cluster (Stages + mode toggle) */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex border border-border">
-          <Button variant="segment" active={!picksOnly} fullWidth={false} onClick={() => choosePicks(false)} className="px-3 py-2">
-            All
-          </Button>
-          <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border whitespace-nowrap">
-            Picks ({picksCount})
-          </Button>
+        <div className="flex items-center gap-0.5">
+          <div className="flex border border-border">
+            <Button variant="segment" active={!picksOnly} fullWidth={false} onClick={() => choosePicks(false)} className="px-3 py-2">
+              All
+            </Button>
+            <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border whitespace-nowrap">
+              Picks ({picksCount})
+            </Button>
+          </div>
+
+          {picksOnly && picksCount > 0 && (
+            <Button
+              variant="accent-outline"
+              fullWidth={false}
+              onClick={() => setShareOpen(true)}
+              title="Share"
+              aria-label="Share"
+              className="shrink-0 !w-8 !h-8 !p-0 flex items-center justify-center"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v12" />
+                <path d="M8 7l4-4 4 4" />
+                <path d="M8 11H6.5a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H16" />
+              </svg>
+            </Button>
+          )}
         </div>
 
-        {picksOnly && picksCount > 0 && (
-          <Button
-            variant="accent-outline"
-            fullWidth={false}
-            onClick={() => setShareOpen(true)}
-            title="Share"
-            aria-label="Share"
-            className="shrink-0 !w-8 !h-8 !p-0 flex items-center justify-center"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v12" />
-              <path d="M8 7l4-4 4 4" />
-              <path d="M8 11H6.5a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H16" />
-            </svg>
-          </Button>
-        )}
-
-        {layoutMode === 'list' && (
-          <Button
-            variant="icon"
-            fullWidth={false}
-            onClick={() => setStagesOpen(true)}
-            title="Stages"
-            aria-label="Stages"
-            className="shrink-0 !w-auto !h-auto gap-1.5 px-3 py-2 font-mono font-bold text-xs uppercase tracking-wider"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            {visibleStages.length}/{stages.length}
-          </Button>
-        )}
-
-        <div className="flex">
-          {(['timetable', 'list'] as const).map((m, i) => (
+        <div className="flex items-center gap-0.5">
+          {layoutMode === 'list' && (
             <Button
-              key={m}
-              variant="icon-toggle"
-              active={layoutMode === m}
+              variant="icon"
               fullWidth={false}
-              onClick={() => chooseLayout(m)}
-              title={m === 'timetable' ? 'Timetable' : 'List'}
-              aria-label={m}
-              className={i > 0 ? '-ml-px' : ''}
+              onClick={() => setStagesOpen(true)}
+              title="Stages"
+              aria-label="Stages"
+              className="shrink-0 !w-auto !h-auto gap-1.5 px-3 py-2 font-mono font-bold text-xs uppercase tracking-wider"
             >
-              {m === 'timetable' ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="7" rx="1" />
-                  <rect x="3" y="13" width="18" height="7" rx="1" />
-                </svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="8" y1="6" x2="21" y2="6" />
-                  <line x1="8" y1="12" x2="21" y2="12" />
-                  <line x1="8" y1="18" x2="21" y2="18" />
-                  <line x1="3" y1="6" x2="3.01" y2="6" />
-                  <line x1="3" y1="12" x2="3.01" y2="12" />
-                  <line x1="3" y1="18" x2="3.01" y2="18" />
-                </svg>
-              )}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+              </svg>
+              {visibleStages.length}/{stages.length}
             </Button>
-          ))}
+          )}
+
+          <div className="flex">
+            {(['timetable', 'list'] as const).map((m, i) => (
+              <Button
+                key={m}
+                variant="icon-toggle"
+                active={layoutMode === m}
+                fullWidth={false}
+                onClick={() => chooseLayout(m)}
+                title={m === 'timetable' ? 'Timetable' : 'List'}
+                aria-label={m}
+                className={i > 0 ? '-ml-px' : ''}
+              >
+                {m === 'timetable' ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="7" rx="1" />
+                    <rect x="3" y="13" width="18" height="7" rx="1" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="8" y1="6" x2="21" y2="6" />
+                    <line x1="8" y1="12" x2="21" y2="12" />
+                    <line x1="8" y1="18" x2="21" y2="18" />
+                    <line x1="3" y1="6" x2="3.01" y2="6" />
+                    <line x1="3" y1="12" x2="3.01" y2="12" />
+                    <line x1="3" y1="18" x2="3.01" y2="18" />
+                  </svg>
+                )}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 

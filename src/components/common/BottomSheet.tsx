@@ -107,7 +107,7 @@ export function BottomSheet({ title, headerContent, onClose, children }: Props) 
           </Button>
         </div>
 
-        <div ref={contentRef} className="overflow-y-auto flex-1 min-h-0">
+        <div ref={contentRef} className="overflow-y-auto flex-1 min-h-0 pb-16">
           {children}
         </div>
       </div>
