@@ -5,6 +5,7 @@ import { BottomSheet } from '../common/BottomSheet'
 import { ImageLightbox } from '../common/ImageLightbox'
 import { Badge } from '../ui/Badge'
 import { Heading } from '../ui/Heading'
+import { imageCrossOrigin } from '../../lib/images'
 
 type Props = {
   set: SetWithStage
@@ -143,6 +144,7 @@ function ArtistImage({ url, name, size = 120 }: { url: string; name: string; siz
       height={size}
       className="rounded-full object-cover border-2 border-border"
       style={{ width: size, height: size }}
+      crossOrigin={imageCrossOrigin(url)}
       onError={() => setFailed(true)}
       loading="lazy"
     />
