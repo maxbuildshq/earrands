@@ -3,6 +3,7 @@ import type { SetWithStage, SetArtistWithBio } from '../../types/database'
 import { SetActions } from '../actions/SetActions'
 import { Badge } from '../ui/Badge'
 import { Heading } from '../ui/Heading'
+import { imageCrossOrigin } from '../../lib/images'
 
 type Props = {
   set: SetWithStage
@@ -62,6 +63,7 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
                   src={leadImage}
                   alt=""
                   className="w-7 h-7 rounded-full object-cover border border-border shrink-0"
+                  crossOrigin={imageCrossOrigin(leadImage)}
                   onError={() => setImgError(true)}
                   loading="lazy"
                 />

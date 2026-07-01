@@ -5,6 +5,7 @@ import { GoingToggle } from '../actions/GoingToggle'
 import { FollowButton } from '../festival/FollowButton'
 import { Badge } from '../ui/Badge'
 import { SetSheet } from './SetSheet'
+import { imageCrossOrigin } from '../../lib/images'
 
 type Props = {
   festival: Festival
@@ -64,6 +65,7 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
                     src={leadImage}
                     alt=""
                     className="w-7 h-7 rounded-full object-cover border border-border shrink-0"
+                    crossOrigin={imageCrossOrigin(leadImage)}
                     loading="lazy"
                   />
                 )}
