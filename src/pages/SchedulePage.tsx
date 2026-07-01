@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import posthog from 'posthog-js'
 import { useFestival, useStages, useSets } from '../hooks/useFestivalData'
+import { useImagePreload } from '../hooks/useImagePreload'
 import { useUserPlans } from '../hooks/useUserPlans'
 import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
@@ -30,6 +31,7 @@ export function SchedulePage() {
   const { data: festival } = useFestival(slug)
   const { data: stages = [] } = useStages(festival?.id)
   const { data: sets = [] } = useSets(festival?.id)
+  useImagePreload(sets)
   const { planSetIds, isGoing, toggleGoing } = useUserPlans()
   const { getRating, setRating } = useUserRatings()
   const now = useNow()

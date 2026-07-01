@@ -15,6 +15,7 @@ export function useFestivals() {
       return data
     },
     staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   })
 }
 
@@ -32,6 +33,7 @@ export function useFestival(slug: string | undefined) {
     },
     enabled: !!slug,
     staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   })
 }
 
@@ -49,6 +51,7 @@ export function useStages(festivalId: string | undefined) {
     },
     enabled: !!festivalId,
     staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   })
 }
 
@@ -66,5 +69,6 @@ export function useSets(festivalId: string | undefined) {
     },
     enabled: !!festivalId,
     staleTime: 24 * 60 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
   })
 }
