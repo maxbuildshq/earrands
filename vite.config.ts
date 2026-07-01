@@ -43,6 +43,15 @@ export default defineConfig({
             },
           },
           {
+            urlPattern: /^https:\/\/(i1\.sndcdn\.com|i\.discogs\.com|ugc\.production\.linktr\.ee)\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'artist-images',
+              expiration: { maxEntries: 200, maxAgeSeconds: 7 * 86400 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/(user_plans|user_ratings)/,
             handler: 'NetworkFirst',
             options: {
