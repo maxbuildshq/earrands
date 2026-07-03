@@ -48,7 +48,8 @@ src/
   types/database.ts          # all Supabase table types
   lib/
     dates.ts                 # getDays(), formatDayLabel(), isAfterMidnight(), toSortableTime()
-    shareImage.ts            # canvas 1080×1920 renderer — drawSchedule(), TEMPLATES
+    shareImage.ts            # canvas 1080×1920 poster renderer — drawSchedulePage(), buildSharePages(), TEMPLATES; display font Anton (ADR 009 addendum)
+    shareLayout.ts           # share-export pure logic — set tiers (soundcloud_followers k-means), pagination, columns
   hooks/                     # useFestivalData, useUserPlan, useFestivalFollows, useFestivalRequests
   pages/                     # FestivalListPage, SchedulePage, MySchedulePage, Login/SignUp
   components/

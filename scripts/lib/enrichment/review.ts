@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import type { EnrichmentResult, ReviewFile, ProgressFile, BioResearchFile } from './types.js'
+import type { EnrichmentField, EnrichmentResult, ReviewFile, ProgressFile, BioResearchFile } from './types.js'
 
 const REVIEW_DIR = 'enrichment-review'
 
@@ -9,7 +9,7 @@ function ensureDir() {
 
 // ── Review file ──────────────────────────────────────────────────────────
 
-export function writeReviewFile(festival: string | null, results: EnrichmentResult[]): string {
+export function writeReviewFile(festival: string | null, results: EnrichmentResult[], fields?: EnrichmentField[]): string {
   ensureDir()
   const slug = festival ?? 'all'
   const path = `${REVIEW_DIR}/${slug}.json`
@@ -21,6 +21,7 @@ export function writeReviewFile(festival: string | null, results: EnrichmentResu
   const review: ReviewFile = {
     generated_at: new Date().toISOString(),
     festival,
+    ...(fields ? { fields } : {}),
     stats: {
       total: results.length,
       enriched: enriched.length,

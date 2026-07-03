@@ -46,6 +46,7 @@ export async function enrichArtist(
     discogs_id: artist.discogs_id,
     city: artist.city ?? null,
     country_code: artist.country_code ?? null,
+    soundcloud_followers: artist.soundcloud_followers ?? null,
     bio: artist.bio ?? null,
     bio_source: null,
     bio_festival: null,
@@ -166,8 +167,9 @@ export async function enrichArtist(
                           (needsField(fields, 'bandcamp') && !result.bandcamp_url)
 
       const needsLocation = needsField(fields, 'location') && !result.city
+      const needsFollowers = needsField(fields, 'followers')
 
-      if (needsScrape || needsLocation) {
+      if (needsScrape || needsLocation || needsFollowers) {
         config.onProgress?.(artist.name, 'Scraping SoundCloud profile')
         const profile = await scrapeSoundCloudProfile(result.soundcloud_url)
         if (profile) {
@@ -191,6 +193,11 @@ export async function enrichArtist(
             result.city = profile.city
             result.country_code = profile.country_code
             result.sources.push('soundcloud-location')
+          }
+          // Capture followers whenever the profile was scraped — same call, so any run fills it in for free.
+          if (profile.followers_count != null) {
+            result.soundcloud_followers = profile.followers_count
+            result.sources.push('soundcloud-followers')
           }
           if (profile.bio) {
             scBio = profile.bio

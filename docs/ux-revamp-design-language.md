@@ -37,6 +37,8 @@ All tokens live in `src/index.css` inside `@theme {}`. Use CSS variables everywh
 
 The `font-mono` Tailwind utility maps to Chakra Petch (it is the only font registered).
 
+Exception: the schedule share-image exports use **Anton** for display type (festival title, set names) — Chakra Petch is too wide at poster sizes. Meta text on the posters stays Chakra Petch. See the addendum in [009](decisions/009-typography-chakra-petch.md).
+
 ---
 
 ## Design language

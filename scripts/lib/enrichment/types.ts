@@ -1,4 +1,4 @@
-export type EnrichmentField = 'image' | 'instagram' | 'soundcloud' | 'bandcamp' | 'bio' | 'location'
+export type EnrichmentField = 'image' | 'instagram' | 'soundcloud' | 'bandcamp' | 'bio' | 'location' | 'followers'
 
 export type Confidence = 'high' | 'medium' | 'low'
 
@@ -40,6 +40,7 @@ export type EnrichmentResult = {
   discogs_id: number | null
   city: string | null
   country_code: string | null
+  soundcloud_followers: number | null
   bio: string | null
   bio_source: string | null
   bio_festival: string | null
@@ -53,6 +54,7 @@ export type EnrichmentResult = {
 export type ReviewFile = {
   generated_at: string
   festival: string | null
+  fields?: EnrichmentField[]
   stats: {
     total: number
     enriched: number
@@ -95,5 +97,6 @@ export type ArtistRow = {
   bio: string | null
   city: string | null
   country_code: string | null
+  soundcloud_followers: number | null
   enrichment_status: string | null
 }

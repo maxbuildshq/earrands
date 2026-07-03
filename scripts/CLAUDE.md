@@ -35,6 +35,7 @@ npm run enrich -- --limit=30                           # process max N artists (
 npm run enrich -- --resume                             # continue from last saved progress
 npm run enrich -- --fields=bandcamp                    # only fetch specific fields
 npm run enrich -- --fields=instagram,image             # comma-separated
+npm run enrich -- --fields=followers                   # refetch just SoundCloud follower count
 npm run enrich -- --apply=enrichment-review/X.json     # apply reviewed file to DB
 ```
 
@@ -122,14 +123,14 @@ Parsing rules (priority order):
 
 ## Artist Enrichment
 
-Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`, `city`, `country_code`, and bio research data.
+Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`, `city`, `country_code`, `soundcloud_followers`, and bio research data.
 
 ### Pipeline flow per artist
 
 1. **Brave Search** → find SoundCloud profile URL (`"<name>" dj music site:soundcloud.com`)
 2. **Brave Search** → (if IG still missing) find Instagram (`"<name>" dj music site:instagram.com`)
 3. **Discogs** → supplementary image candidates (up to 5), Bandcamp URL, SC/IG fallback, bio profile text
-4. **SoundCloud profile scrape** → image candidate, Instagram cross-ref, city/country_code from hydration JSON, SC description as bio fragment
+4. **SoundCloud profile scrape** → image candidate, Instagram cross-ref, city/country_code and `followers_count` (popularity signal for ranking) from the same hydration JSON, SC description as bio fragment
 5. **Bandcamp location fallback** → if SC location missing and Bandcamp URL found, scrape location from Bandcamp page
 6. **Image scoring** (when Cloudflare credentials available) → Cloudflare DETR person detection across all image candidates; picks best person photo
 7. **Instagram resolution** → multi-source cross-reference: SC profile link (most authoritative) → Discogs → Brave Search; conflicts flagged in review notes
@@ -154,6 +155,9 @@ npm run enrich -- --festival=<slug> --fields=bio
 
 # Single artist (testing)
 npm run enrich -- --artist="Speedy J" --fields=bio
+
+# Refresh SoundCloud follower counts only (popularity ranking; followers change over time)
+npm run enrich -- --festival=<slug> --fields=followers
 
 # Apply reviewed JSON to DB (manual review mode)
 npm run enrich -- --apply=enrichment-review/<slug>.json
