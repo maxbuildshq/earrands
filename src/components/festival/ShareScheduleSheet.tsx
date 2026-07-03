@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import posthog from 'posthog-js'
-import '@fontsource/anton' // display font for the share posters (ADR 009 addendum)
 import { BottomSheet } from '../common/BottomSheet'
 import { Button } from '../ui/Button'
 import { TEMPLATES, DISPLAY_FONT, drawSchedulePage, buildSharePages, buildShareFilename } from '../../lib/shareImage'

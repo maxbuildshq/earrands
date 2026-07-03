@@ -3,6 +3,7 @@
 @import "@fontsource/chakra-petch/500.css";
 @import "@fontsource/chakra-petch/600.css";
 @import "@fontsource/chakra-petch/700.css";
+@import "@fontsource/anton/400.css"; /* share-poster display font only — ADR 009 addendum */
 
 @theme {
   --color-accent: #CCFF00;
