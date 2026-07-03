@@ -19,6 +19,7 @@
     "import-nonmusical": "tsx --env-file=.env.local scripts/import-nonmusical.ts"
   },
   "dependencies": {
+    "@fontsource/anton": "^5.2.7",
     "@fontsource/barlow-condensed": "^5.2.8",
     "@fontsource/chakra-petch": "^5.2.7",
     "@fontsource/space-mono": "^5.2.9",

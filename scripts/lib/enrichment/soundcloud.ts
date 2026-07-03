@@ -10,6 +10,7 @@ export type SoundCloudProfile = {
   city: string | null
   country_code: string | null
   bio: string | null
+  followers_count: number | null
 }
 
 type WebProfile = {
@@ -25,7 +26,7 @@ export async function scrapeSoundCloudProfile(profileUrl: string): Promise<Sound
     const $ = await fetchWithCheerio(profileUrl)
     const image_url = extractProfileImage($)
     const track_urls = extractTrackUrls($, profileUrl)
-    const { city, country_code, bio } = extractHydrationData($)
+    const { city, country_code, bio, followers_count } = extractHydrationData($)
 
     // Use Playwright to intercept the web-profiles API call — social links are not in SSR HTML
     const webProfiles = await fetchWebProfiles(profileUrl)
@@ -40,6 +41,7 @@ export async function scrapeSoundCloudProfile(profileUrl: string): Promise<Sound
       city,
       country_code,
       bio,
+      followers_count,
     }
   } catch {
     return null
@@ -109,10 +111,11 @@ function extractLinksFromWebProfiles(profiles: WebProfile[]): {
 
 type CheerioRoot = ReturnType<typeof fetchWithCheerio> extends Promise<infer T> ? T : never
 
-function extractHydrationData($: CheerioRoot): { city: string | null; country_code: string | null; bio: string | null } {
+function extractHydrationData($: CheerioRoot): { city: string | null; country_code: string | null; bio: string | null; followers_count: number | null } {
   let city: string | null = null
   let country_code: string | null = null
   let bio: string | null = null
+  let followers_count: number | null = null
 
   $('script').each((_, el) => {
     const text = $(el).html()
@@ -127,11 +130,12 @@ function extractHydrationData($: CheerioRoot): { city: string | null; country_co
         city = userEntry.data.city || null
         country_code = userEntry.data.country_code || null
         bio = userEntry.data.description || null
+        followers_count = typeof userEntry.data.followers_count === 'number' ? userEntry.data.followers_count : null
       }
     } catch {}
   })
 
-  return { city, country_code, bio }
+  return { city, country_code, bio, followers_count }
 }
 
 function extractProfileImage($: CheerioRoot): string | null {

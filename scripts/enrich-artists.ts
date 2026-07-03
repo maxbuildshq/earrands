@@ -39,12 +39,16 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --fields=bandcamp               Only fetch specific fields
   npm run enrich -- --fields=instagram,image        Comma-separated field list
   npm run enrich -- --apply=enrichment-review/X.json  Apply reviewed file to DB
+  npm run enrich -- --apply=X.json --fields=followers  Apply only these fields, regardless of file scope
   npm run enrich -- --auto-apply                       Write results directly to DB (no manual --apply step)
   npm run enrich -- --poll-jobs                        Poll enrichment_jobs table for pending jobs
   npm run enrich -- --poll-jobs --poll-interval=60     Custom poll interval (seconds, default: 30)
   npm run enrich -- --search-keywords="drum & bass"   Append keywords to Brave search queries
 
-Fields: image, instagram, soundcloud, bandcamp, bio, location`)
+Fields: image, instagram, soundcloud, bandcamp, bio, location, followers
+
+Note: --fields=X scopes both what's fetched AND what's written to the DB on apply — other
+columns present in the review JSON (carried over from the current DB row) are never touched.`)
   process.exit(0)
 }
 
@@ -118,14 +122,72 @@ function deriveBioSources(research: BioResearch, soundcloudUrl: string | null, d
 
 // ── Apply mode ───────────────────────────────────────────────────────────────
 
-async function applyReviewFile(path: string) {
+function fieldColumns(field: EnrichmentField): string[] {
+  switch (field) {
+    case 'image': return ['image_url']
+    case 'instagram': return ['instagram_url']
+    case 'soundcloud': return ['soundcloud_url', 'soundcloud_embed_url']
+    case 'bandcamp': return ['bandcamp_url']
+    case 'location': return ['city', 'country_code']
+    case 'followers': return ['soundcloud_followers']
+    case 'bio': return ['bio_research', 'bio_sources']
+  }
+}
+
+function buildUpdateData(a: EnrichmentResult, scopedFields?: EnrichmentField[]): Record<string, any> | null {
+  // Full enrichment — write everything
+  if (!scopedFields) {
+    const data: Record<string, any> = {
+      image_url: a.image_url,
+      instagram_url: a.instagram_url,
+      soundcloud_url: a.soundcloud_url,
+      soundcloud_embed_url: a.soundcloud_embed_url,
+      bandcamp_url: a.bandcamp_url,
+      discogs_id: a.discogs_id,
+      enriched_at: new Date().toISOString(),
+    }
+    if (a.city) data.city = a.city
+    if (a.country_code) data.country_code = a.country_code
+    if (a.soundcloud_followers != null) data.soundcloud_followers = a.soundcloud_followers
+    if (a.bio_research) {
+      data.bio_research = a.bio_research
+      data.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
+    }
+    return data
+  }
+
+  // Field-scoped enrichment — only write targeted columns
+  const allowed = new Set(scopedFields.flatMap(fieldColumns))
+  const data: Record<string, any> = {}
+
+  if (allowed.has('image_url') && a.image_url) data.image_url = a.image_url
+  if (allowed.has('instagram_url') && a.instagram_url) data.instagram_url = a.instagram_url
+  if (allowed.has('soundcloud_url') && a.soundcloud_url) data.soundcloud_url = a.soundcloud_url
+  if (allowed.has('soundcloud_embed_url') && a.soundcloud_embed_url) data.soundcloud_embed_url = a.soundcloud_embed_url
+  if (allowed.has('bandcamp_url') && a.bandcamp_url) data.bandcamp_url = a.bandcamp_url
+  if (allowed.has('city') && a.city) data.city = a.city
+  if (allowed.has('country_code') && a.country_code) data.country_code = a.country_code
+  if (allowed.has('soundcloud_followers') && a.soundcloud_followers != null) data.soundcloud_followers = a.soundcloud_followers
+  if (allowed.has('bio_research') && a.bio_research) {
+    data.bio_research = a.bio_research
+    data.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
+  }
+
+  return Object.keys(data).length > 0 ? data : null
+}
+
+async function applyReviewFile(path: string, fieldsOverride?: EnrichmentField[]) {
   const review = readReviewFile(path)
-  const toApply = review.artists.filter(a =>
-    !a.review_notes.includes('Skipped: combo/temporary entry') &&
-    (a.image_url || a.instagram_url || a.soundcloud_url || a.soundcloud_embed_url || a.bandcamp_url || a.city || a.bio)
-  )
+  // --fields= on the apply command always wins — lets you restrict (or double-check)
+  // what gets written regardless of what the review file itself claims to be scoped to.
+  const scopedFields = fieldsOverride ?? review.fields
+  const toApply = review.artists.filter(a => {
+    if (a.review_notes.includes('Skipped: combo/temporary entry')) return false
+    return buildUpdateData(a, scopedFields) !== null
+  })
 
   console.log(`  Review file: ${path}`)
+  if (scopedFields) console.log(`  Scoped to fields: ${scopedFields.join(', ')}`)
   console.log(`  Artists to update: ${toApply.length}`)
 
   if (toApply.length === 0) {
@@ -135,14 +197,8 @@ async function applyReviewFile(path: string) {
 
   if (dryRun) {
     for (const a of toApply) {
-      const parts: string[] = []
-      if (a.image_url) parts.push('img')
-      if (a.instagram_url) parts.push('ig')
-      if (a.soundcloud_url) parts.push('sc')
-      if (a.soundcloud_embed_url) parts.push('embed')
-      if (a.bandcamp_url) parts.push('bc')
-      if (a.city) parts.push('loc')
-      if (a.bio) parts.push('bio')
+      const data = buildUpdateData(a, scopedFields)!
+      const parts = Object.keys(data)
       console.log(`    ${chalk.green('✓')} ${a.display_name} [${parts.join(', ')}]`)
     }
     console.log(chalk.yellow('\n  Dry run — no DB writes.'))
@@ -159,22 +215,7 @@ async function applyReviewFile(path: string) {
 
   let updated = 0
   for (const a of toApply) {
-    const updateData: Record<string, any> = {
-      image_url: a.image_url,
-      instagram_url: a.instagram_url,
-      soundcloud_url: a.soundcloud_url,
-      soundcloud_embed_url: a.soundcloud_embed_url,
-      bandcamp_url: a.bandcamp_url,
-      discogs_id: a.discogs_id,
-      enriched_at: new Date().toISOString(),
-    }
-    if (a.city) updateData.city = a.city
-    if (a.country_code) updateData.country_code = a.country_code
-    if (a.bio_research) {
-      updateData.bio_research = a.bio_research
-      // Derive flat source list for admin provenance display
-      updateData.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
-    }
+    const updateData = buildUpdateData(a, scopedFields)!
 
     const { error } = await supabase
       .from('artists')
@@ -198,7 +239,7 @@ let festivalName: string | undefined
 async function fetchArtists(): Promise<ArtistRow[]> {
   let query = supabase
     .from('artists')
-    .select('id, name, sort_name, is_collective, image_url, instagram_url, soundcloud_url, soundcloud_embed_url, bandcamp_url, discogs_id, enriched_at, bio, city, country_code, enrichment_status')
+    .select('id, name, sort_name, is_collective, image_url, instagram_url, soundcloud_url, soundcloud_embed_url, bandcamp_url, discogs_id, enriched_at, bio, city, country_code, soundcloud_followers, enrichment_status')
 
   if (artistArg) {
     const names = artistArg.split(',').map(n => n.trim()).filter(Boolean)
@@ -242,7 +283,7 @@ async function fetchArtists(): Promise<ArtistRow[]> {
     query = query.in('id', uniqueIds)
   }
 
-  if (!force && !artistArg) {
+  if (!force && !artistArg && !fields) {
     query = query.is('enriched_at', null)
   }
 
@@ -259,7 +300,7 @@ async function fetchArtists(): Promise<ArtistRow[]> {
 
 async function main() {
   if (applyArg) {
-    await applyReviewFile(applyArg)
+    await applyReviewFile(applyArg, fields)
     return
   }
 
@@ -329,6 +370,7 @@ async function main() {
         discogs_id: null,
         city: null,
         country_code: null,
+        soundcloud_followers: null,
       } : artist
       const result = await enrichArtist(artistToEnrich, config)
       results.push(result)
@@ -343,6 +385,7 @@ async function main() {
       if (result.soundcloud_embed_url) parts.push('embed')
       if (result.bandcamp_url) parts.push('bc')
       if (result.city) parts.push('loc')
+      if (result.soundcloud_followers != null) parts.push('followers')
       if (result.bio_research) parts.push('bio-res')
 
       const status = parts.length > 0
@@ -370,6 +413,7 @@ async function main() {
         discogs_id: null,
         city: null,
         country_code: null,
+        soundcloud_followers: null,
         bio: null,
         bio_source: null,
         bio_festival: null,
@@ -396,7 +440,7 @@ async function main() {
   console.log(`    Not found:    ${chalk.red(String(notFound.length))}`)
 
   // Write review file
-  const reviewPath = writeReviewFile(festivalArg ?? null, results)
+  const reviewPath = writeReviewFile(festivalArg ?? null, results, fields)
   console.log(chalk.dim(`\n  Review file: ${reviewPath}`))
 
   // Write bio research chunks if bio field was requested

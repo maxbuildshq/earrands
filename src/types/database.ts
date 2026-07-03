@@ -42,6 +42,7 @@ export type SetArtistWithBio = {
     soundcloud_url: string | null
     soundcloud_embed_url: string | null
     bandcamp_url: string | null
+    soundcloud_followers: number | null
   }
 }
 
@@ -81,6 +82,7 @@ export type Artist = {
   enriched_at: string | null
   city: string | null
   country_code: string | null
+  soundcloud_followers: number | null
   bio_source: string | null
   bio_festival: string | null
   bio_sources: Array<{ url: string; title: string; snippet: string; type: string }> | null
