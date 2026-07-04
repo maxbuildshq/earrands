@@ -168,7 +168,7 @@ export function drawSchedulePage(
     font?: ShareFont
   },
 ) {
-  const { festivalName, page, pageIndex, pageCount, template: t, tiers, font = DISPLAY_FONT } = opts
+  const { festivalName, page, template: t, tiers, font = DISPLAY_FONT } = opts
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')
