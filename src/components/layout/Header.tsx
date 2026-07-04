@@ -64,14 +64,14 @@ export function Header() {
   // a date/location sub-line is appended below without changing row 1's size or position.
   return (
     <header ref={headerRef} className="sticky top-0 z-50 bg-surface/95 backdrop-blur-sm border-b border-border pt-[env(safe-area-inset-top)]">
-      <div className="max-w-2xl mx-auto px-4">
+      <div className="mx-auto px-4">
         <div className="h-14 flex items-center justify-between gap-3">
           <Link
             to="/"
             aria-label={onFestival ? 'Back to festivals' : undefined}
             className="font-mono font-bold text-accent text-xl tracking-tight truncate min-w-0"
           >
-            {onFestival ? festival.name : 'EARRANDS'}
+            {onFestival ? festival.name : <><span className="text-accent">EAR</span><span className="text-text-secondary">RANDS</span></>}
           </Link>
           <nav className="flex items-center shrink-0">
             <FeedbackButton />

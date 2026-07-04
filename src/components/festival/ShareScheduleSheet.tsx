@@ -72,7 +72,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     if (!fontsReady || filteredSets.length === 0) return []
     const { perDay, grouped, single } = buildSharePages({ festivalName, sets: filteredSets, tiers })
     const options: SplitOption[] = [
-      { mode: 'perDay' as const, label: `Per day (${perDay.length})`, pages: perDay },
+      { mode: 'perDay' as const, label: `Days (${perDay.length})`, pages: perDay },
       { mode: 'grouped' as const, label: grouped.length === 1 ? '1 image' : `Combined (${grouped.length})`, pages: grouped },
       ...(single ? [{ mode: 'single' as const, label: '1 image', pages: single }] : []),
     ]

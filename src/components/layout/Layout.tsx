@@ -42,7 +42,7 @@ export function Layout() {
   return (
     <div className="min-h-screen pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <Header />
-      <main className="max-w-2xl mx-auto px-4 pb-20">
+      <main className="mx-auto px-4 pb-20">
         <Outlet />
       </main>
     </div>

@@ -49,17 +49,19 @@ const BODY_TOP_GAP = 24
 const TITLE_SIZES = [118, 104, 92, 80, 70, 62]
 
 // Sizes spread wide on purpose — the tier hierarchy must read at a glance.
+// Headliner caps below the smallest title size (62px) so it never competes
+// with the festival name.
 type TierStyle = { size: number; lh: number; pad: number; time: number }
 const TIER_STYLES: Record<1 | 2, Record<SetTier, TierStyle>> = {
   1: {
-    headliner: { size: 104, lh: 114, pad: 34, time: 26 },
-    big: { size: 60, lh: 72, pad: 30, time: 26 },
-    standard: { size: 38, lh: 50, pad: 26, time: 24 },
+    headliner: { size: 80, lh: 90, pad: 30, time: 26 },
+    big: { size: 54, lh: 66, pad: 28, time: 24 },
+    standard: { size: 36, lh: 48, pad: 24, time: 22 },
   },
   2: {
-    headliner: { size: 62, lh: 72, pad: 26, time: 20 },
-    big: { size: 42, lh: 52, pad: 22, time: 20 },
-    standard: { size: 28, lh: 38, pad: 20, time: 18 },
+    headliner: { size: 54, lh: 64, pad: 24, time: 20 },
+    big: { size: 38, lh: 48, pad: 20, time: 18 },
+    standard: { size: 26, lh: 36, pad: 18, time: 16 },
   },
 }
 
@@ -69,6 +71,8 @@ const metaStr = (size: number, weight = 600) => `${weight} ${size}px ${META}`
 
 // Pages with spare room scale their type up to fill the poster (largest first).
 const BOOST_SCALES = [2, 1.8, 1.6, 1.45, 1.3, 1.15, 1]
+// Pagination tries progressively smaller text to avoid splitting a day.
+const SHRINK_SCALES = [1, 0.9, 0.8]
 
 const colWidth = (cols: 1 | 2) => (cols === 1 ? W - PAD * 2 : (W - PAD * 2 - GUTTER) / 2)
 
@@ -151,8 +155,15 @@ export function buildSharePages(opts: {
   const ctx = document.createElement('canvas').getContext('2d')
   if (!ctx) return { perDay: [], grouped: [], single: null }
   const bodyHeight = FOOTER_RULE_Y - BODY_TOP_GAP - headerBottom(layoutTitle(ctx, festivalName, font))
-  const { rowH } = buildMetrics(ctx, sets, tiers, font)
-  return paginateSets(sets, rowH, bodyHeight)
+  // Try progressively smaller text to fit more sets per page before splitting.
+  let best: ReturnType<typeof paginateSets> | null = null
+  for (const scale of SHRINK_SCALES) {
+    const { rowH } = buildMetrics(ctx, sets, tiers, font, scale)
+    const result = paginateSets(sets, rowH, bodyHeight)
+    if (!best || result.perDay.length < best.perDay.length) best = result
+    if (result.perDay.length <= new Set(sets.map(s => s.day)).size) break
+  }
+  return best!
 }
 
 /** Renders one page of the user's schedule as a 9:16 editorial poster. */
