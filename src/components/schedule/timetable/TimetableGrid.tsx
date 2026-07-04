@@ -233,8 +233,8 @@ export function TimetableGrid({
                 )
               })}
               {nowLeft != null && (
-                <Badge variant="accent" className="absolute top-1 -translate-x-1/2 rounded-[3px] z-30" style={{ left: nowLeft }}>
-                  NOW {amsterdamHM(now)}
+                <Badge variant="accent" className="absolute top-1 -translate-x-1/2 rounded-[3px] z-30 !text-base" style={{ left: nowLeft }}>
+                  NOW
                 </Badge>
               )}
             </div>

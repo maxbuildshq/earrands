@@ -20,6 +20,7 @@ export function Layout() {
     const onStart = (e: TouchEvent) => {
       const target = e.target as Element | null
       if (target?.closest('[data-swipe-back="exclude"]')) return
+      if (e.touches[0].clientX > window.innerWidth * 0.2) return
       tracking = true
       startX = e.touches[0].clientX
       startY = e.touches[0].clientY

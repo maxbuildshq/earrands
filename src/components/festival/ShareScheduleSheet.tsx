@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import posthog from 'posthog-js'
 import { BottomSheet } from '../common/BottomSheet'
 import { Button } from '../ui/Button'
+import { DayMultiToggle } from '../schedule/DayMultiToggle'
 import { TEMPLATES, DISPLAY_FONT, drawSchedulePage, buildSharePages, buildShareFilename } from '../../lib/shareImage'
 import { computeSetTiers } from '../../lib/shareLayout'
 import type { SchedulePage, SplitMode } from '../../lib/shareLayout'
@@ -28,8 +29,32 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
   const [error, setError] = useState('')
   const createShare = useCreateSharedSchedule()
 
-  // Wait for the display weight before measuring/drawing, so pagination and
-  // text layout aren't computed against a fallback font.
+  const availableDays = useMemo(() => {
+    const daySet = new Set(sets.map(s => s.day))
+    return [...daySet].sort()
+  }, [sets])
+
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(() => new Set(availableDays))
+
+  const handleDayToggle = useCallback((day: string) => {
+    setSelectedDays(prev => {
+      const next = new Set(prev)
+      if (next.has(day)) {
+        if (next.size <= 1) return prev
+        next.delete(day)
+      } else {
+        next.add(day)
+      }
+      return next
+    })
+    setPageIdx(0)
+  }, [])
+
+  const filteredSets = useMemo(
+    () => sets.filter(s => selectedDays.has(s.day)),
+    [sets, selectedDays],
+  )
+
   useEffect(() => {
     let cancelled = false
     Promise.allSettled([
@@ -41,21 +66,18 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     return () => { cancelled = true }
   }, [])
 
-  const tiers = useMemo(() => computeSetTiers(sets), [sets])
+  const tiers = useMemo(() => computeSetTiers(filteredSets), [filteredSets])
 
-  // Per-day first (story-friendly), then size-aware grouping, then all-in-one
-  // when it actually fits. Options with identical page counts are duplicates
-  // (grouping only differs when it merges days), so keep the first.
   const splitOptions = useMemo<SplitOption[]>(() => {
-    if (!fontsReady || sets.length === 0) return []
-    const { perDay, grouped, single } = buildSharePages({ festivalName, sets, tiers })
+    if (!fontsReady || filteredSets.length === 0) return []
+    const { perDay, grouped, single } = buildSharePages({ festivalName, sets: filteredSets, tiers })
     const options: SplitOption[] = [
       { mode: 'perDay' as const, label: `Per day (${perDay.length})`, pages: perDay },
       { mode: 'grouped' as const, label: grouped.length === 1 ? '1 image' : `Combined (${grouped.length})`, pages: grouped },
       ...(single ? [{ mode: 'single' as const, label: '1 image', pages: single }] : []),
     ]
     return options.filter((o, i) => o.pages.length > 0 && !options.slice(0, i).some(p => p.pages.length === o.pages.length))
-  }, [fontsReady, sets, tiers, festivalName])
+  }, [fontsReady, filteredSets, tiers, festivalName])
 
   const active = splitOptions.find(o => o.mode === splitMode) ?? splitOptions[0]
   const pages = active?.pages ?? []
@@ -74,6 +96,21 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     })
   }, [festivalName, pages, safePageIdx, template, tiers])
 
+  // Horizontal swipe on preview carousel
+  const swipeStart = useRef<{ x: number; y: number } | null>(null)
+  const onPreviewTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }, [])
+  const onPreviewTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeStart.current || pages.length <= 1) return
+    const dx = e.changedTouches[0].clientX - swipeStart.current.x
+    const dy = Math.abs(e.changedTouches[0].clientY - swipeStart.current.y)
+    if (dy > 50) return
+    if (dx < -50) setPageIdx(i => Math.min(i + 1, pages.length - 1))
+    else if (dx > 50) setPageIdx(i => Math.max(i - 1, 0))
+    swipeStart.current = null
+  }, [pages.length])
+
   const renderAllPages = async (): Promise<File[]> => {
     const files: File[] = []
     for (let i = 0; i < pages.length; i++) {
@@ -89,7 +126,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
   const eventProps = () => ({
     festival_name: festivalName,
     template: template.id,
-    set_count: sets.length,
+    set_count: filteredSets.length,
     split_mode: active?.mode,
     page_count: pages.length,
   })
@@ -100,7 +137,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
     try {
       const code = await createShare.mutateAsync({
         festivalId,
-        setIds: sets.map(s => s.id),
+        setIds: filteredSets.map(s => s.id),
       })
       const shareUrl = `https://earrands.app/app/festivals/${festivalSlug}/shared/${code}`
 
@@ -113,8 +150,6 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
           text: `My ${festivalName} lineup\n${shareUrl}`,
         })
       } else if (navigator.share) {
-        // No file support (typical on desktop): the button still promises
-        // link + images, so save the images before the link-only share sheet.
         for (const f of files) downloadBlob(f, f.name)
         await navigator.share({
           title: `My ${festivalName} schedule`,
@@ -143,42 +178,53 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
 
   return (
     <BottomSheet title="SHARE MY SCHEDULE" onClose={onClose}>
-      <div className="px-4 pb-8 pt-1 space-y-4">
-        <div className="flex gap-2">
-          {TEMPLATES.map((t, i) => (
-            <Button
-              key={t.id}
-              type="button"
-              variant="choice"
-              active={i === templateIdx}
-              fullWidth={false}
-              onClick={() => setTemplateIdx(i)}
-              className="flex-1 py-2 px-2"
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
-
-        {splitOptions.length > 1 && (
-          <div className="flex gap-2">
-            {splitOptions.map(o => (
+      <div className="px-4 pb-4 pb-[env(safe-area-inset-bottom)] pt-1 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex border border-border w-max">
+            {TEMPLATES.map((t, i) => (
               <Button
-                key={o.mode}
+                key={t.id}
                 type="button"
-                variant="choice"
-                active={o.mode === active?.mode}
+                variant="segment"
+                active={i === templateIdx}
                 fullWidth={false}
-                onClick={() => { setSplitMode(o.mode); setPageIdx(0) }}
-                className="flex-1 py-2 px-2"
+                onClick={() => setTemplateIdx(i)}
+                className={`px-3.5 py-2.5${i > 0 ? ' border-l border-border' : ''}`}
               >
-                {o.label}
+                {t.label}
               </Button>
             ))}
           </div>
+
+          {splitOptions.length > 1 && (
+            <div className="flex border border-border w-max">
+              {splitOptions.map((o, i) => (
+                <Button
+                  key={o.mode}
+                  type="button"
+                  variant="segment"
+                  active={o.mode === active?.mode}
+                  fullWidth={false}
+                  onClick={() => { setSplitMode(o.mode); setPageIdx(0) }}
+                  className={`px-3.5 py-2.5${i > 0 ? ' border-l border-border' : ''}`}
+                >
+                  {o.label}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {availableDays.length > 1 && (
+          <DayMultiToggle days={availableDays} selectedDays={selectedDays} onToggle={handleDayToggle} />
         )}
 
-        <div className="flex items-center justify-center gap-2">
+        <div
+          className="flex items-center justify-center gap-2"
+          style={{ touchAction: 'pan-y' }}
+          onTouchStart={onPreviewTouchStart}
+          onTouchEnd={onPreviewTouchEnd}
+        >
           {pages.length > 1 && (
             <Button
               type="button"
@@ -193,7 +239,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
           <canvas
             ref={canvasRef}
             className="border border-border"
-            style={{ maxHeight: '48vh', maxWidth: '100%', width: 'auto' }}
+            style={{ maxHeight: '36vh', maxWidth: '100%', width: 'auto' }}
           />
           {pages.length > 1 && (
             <Button
