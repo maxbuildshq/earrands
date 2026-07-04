@@ -41,8 +41,8 @@ const GUTTER = 44
 
 const TOP_BAR_Y = 64
 const TOP_BAR_H = 12
-const FOOTER_RULE_Y = H - 148
-const FOOTER_BASELINE = H - 72
+const FOOTER_RULE_Y = H - 100
+const FOOTER_BASELINE = H - 56
 const BODY_TOP_GAP = 24
 
 // Title shrinks until the festival name fits two lines.
@@ -168,7 +168,7 @@ export function drawSchedulePage(
     font?: ShareFont
   },
 ) {
-  const { festivalName, page, pageIndex, pageCount, template: t, tiers, font = DISPLAY_FONT } = opts
+  const { festivalName, page, template: t, tiers, font = DISPLAY_FONT } = opts
   canvas.width = W
   canvas.height = H
   const ctx = canvas.getContext('2d')
@@ -281,16 +281,12 @@ export function drawSchedulePage(
     prev = s
   }
 
-  // Footer — rule, "made with" URL, page indicator
+  // Footer — rule + right-aligned "made with earrands.app"
   ctx.fillStyle = t.ink
   ctx.fillRect(PAD, FOOTER_RULE_Y, W - PAD * 2, 3)
-  ctx.font = metaStr(28, 400)
-  ctx.fillText('made with https://earrands.app', PAD, FOOTER_BASELINE)
-  if (pageCount > 1) {
-    ctx.font = fontStr(font, 56)
-    const label = `${pageIndex + 1}/${pageCount}`
-    ctx.fillText(label, W - PAD - ctx.measureText(label).width, FOOTER_BASELINE)
-  }
+  ctx.font = metaStr(22, 400)
+  const footerText = 'made with https://earrands.app'
+  ctx.fillText(footerText, W - PAD - ctx.measureText(footerText).width, FOOTER_BASELINE)
 }
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
