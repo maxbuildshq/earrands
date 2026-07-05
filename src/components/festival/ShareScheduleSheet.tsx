@@ -142,7 +142,10 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
       const shareUrl = `https://earrands.app/app/festivals/${festivalSlug}/shared/${code}`
 
       const files = await renderAllPages()
-      posthog.capture('schedule_shared', { ...eventProps(), share_code: code })
+      const method = navigator.canShare?.({ files })
+        ? 'native_share_files'
+        : typeof navigator.share === 'function' ? 'native_share_link' : 'download_fallback'
+      posthog.capture('schedule_shared', { ...eventProps(), share_code: code, method })
       if (navigator.canShare?.({ files })) {
         await navigator.share({
           files,

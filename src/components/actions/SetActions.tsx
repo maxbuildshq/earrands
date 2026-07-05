@@ -37,6 +37,7 @@ export function SetActions({ isGoing, rating, onToggleGoing, onRate, showRating 
         onClick={gated(onToggleGoing)}
         title={isGoing ? 'Remove from my sets' : 'Add to my sets'}
         aria-pressed={isGoing}
+        data-onboarding-target="picks"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
           {isGoing ? <polyline points="2,7 6,11 12,3" /> : (<><line x1="7" y1="2" x2="7" y2="12" /><line x1="2" y1="7" x2="12" y2="7" /></>)}
@@ -71,7 +72,7 @@ export function SetActions({ isGoing, rating, onToggleGoing, onRate, showRating 
 
       {authOpen && (
         <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthOpen(false)}>
-          <AuthPrompt message="Create an account to mark sets you're going to and rate them." />
+          <AuthPrompt source="set_action" message="Create an account to pick your sets. We'll flag the clashes — and you get a schedule you can send to the group." />
         </BottomSheet>
       )}
     </div>

@@ -8,6 +8,7 @@ import { useUserRatings } from '../hooks/useUserRatings'
 import { useNow, isNowPlaying } from '../hooks/useNowPlaying'
 import { useAuth } from '../hooks/useAuth'
 import { useRevealTooltip } from '../hooks/useRevealTooltip'
+import { saveLastOpened } from '../hooks/useAutoRedirect'
 import { DayToggle } from '../components/schedule/DayToggle'
 import { StagesSheet } from '../components/schedule/StagesSheet'
 import { SetCard } from '../components/schedule/SetCard'
@@ -15,6 +16,7 @@ import { SetSheet } from '../components/schedule/SetSheet'
 import { LineupView } from '../components/schedule/LineupView'
 import { TimetableGrid } from '../components/schedule/timetable/TimetableGrid'
 import { ShareScheduleSheet } from '../components/festival/ShareScheduleSheet'
+import { OnboardingHints, ClashMock, PosterMock } from '../components/onboarding/OnboardingHints'
 import { Button } from '../components/ui/Button'
 import { Heading } from '../components/ui/Heading'
 // Atmosphere (fog) temporarily disabled — perf. Component + CSS kept for later.
@@ -65,8 +67,13 @@ export function SchedulePage() {
   const openSheet = (set: SetWithStage) => {
     const clashCount = mySets.filter(s => s.id !== set.id && setsOverlap(s, set)).length
     if (clashCount > 0) posthog.capture('conflict_viewed', { set_id: set.id, clash_count: clashCount })
+    posthog.capture('set_sheet_opened', { set_id: set.id })
     setSheetSet(set)
   }
+
+  useEffect(() => {
+    if (slug) saveLastOpened(slug)
+  }, [slug])
 
   // Set initial day: prefer current festival day, fall back to first day
   useEffect(() => {
@@ -221,6 +228,7 @@ export function SchedulePage() {
               onClick={() => setShareOpen(true)}
               title="Share"
               aria-label="Share"
+              data-onboarding-target="share"
               className="shrink-0 !w-8 !h-8 !p-0 flex items-center justify-center"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -240,6 +248,7 @@ export function SchedulePage() {
               onClick={() => setStagesOpen(true)}
               title="Stages"
               aria-label="Stages"
+              data-onboarding-target="stage_filter"
               className="shrink-0 !w-auto !h-auto gap-1.5 px-3 py-2 font-mono font-bold text-xs uppercase tracking-wider"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -284,21 +293,14 @@ export function SchedulePage() {
 
       <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
 
+      <OnboardingHints />
+
       {picksEmpty ? (
         <div className="flex flex-col items-center gap-4 text-center py-16 text-text-secondary font-mono text-sm">
           {user ? (
             <p>No sets marked yet. Tap <span className="text-accent font-bold">+</span> on a set to build your picks.</p>
           ) : (
-            <>
-              <p>Sign up to save the sets you're going to.</p>
-              <Link
-                to="/signup"
-                state={{ returnTo: `/festivals/${slug}/schedule` }}
-                className="px-4 py-2 bg-accent text-surface font-bold uppercase tracking-wider hover:bg-accent-dim transition-colors"
-              >
-                Sign up
-              </Link>
-            </>
+            <AnonymousPicksPitch slug={slug} />
           )}
         </div>
       ) : layoutMode === 'timetable' ? (
@@ -400,5 +402,41 @@ export function SchedulePage() {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Anonymous "Picks" empty state — a value pitch instead of a bare gate
+ * (docs/onboarding-strategy.md, Layer B). Mini-mocks are drawn with the
+ * app's own components, no image assets.
+ */
+function AnonymousPicksPitch({ slug }: { slug?: string }) {
+  useEffect(() => {
+    posthog.capture('auth_prompt_shown', { source: 'my_schedule' })
+  }, [])
+
+  return (
+    <>
+      <div className="flex items-center justify-center gap-6">
+        <div className="flex flex-col items-center gap-2">
+          <ClashMock />
+          <span className="text-xs">Clashes flagged</span>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <PosterMock />
+          <span className="text-xs">Share as link or poster</span>
+        </div>
+      </div>
+      <p className="text-text-primary max-w-xs">
+        Pick your sets. We'll handle the clashes — and you get a schedule you can send to the group.
+      </p>
+      <Link
+        to="/signup"
+        state={{ returnTo: `/festivals/${slug}/schedule` }}
+        className="px-4 py-2 bg-accent text-surface font-bold uppercase tracking-wider hover:bg-accent-dim transition-colors"
+      >
+        Sign up
+      </Link>
+    </>
   )
 }

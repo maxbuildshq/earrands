@@ -116,7 +116,14 @@ input:-webkit-autofill {
   50% { box-shadow: 0 0 24px color-mix(in srgb, var(--color-accent) 68%, transparent); }
 }
 .animate-pulse-glow { animation: pulse-glow 2.6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .animate-pulse-glow { animation: none; } }
+.onboarding-target {
+  border-color: var(--color-accent) !important;
+  border-width: 2px !important;
+  animation: pulse-glow 2.6s ease-in-out infinite;
+  z-index: 1;
+  position: relative;
+}
+@media (prefers-reduced-motion: reduce) { .animate-pulse-glow, .onboarding-target { animation: none; } }
 
 @keyframes atm-fade { 0%, 100% { opacity: 0; } 45% { opacity: var(--atm-fog); } }
 @keyframes atm-drift {

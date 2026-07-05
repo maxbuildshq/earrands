@@ -39,6 +39,7 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
         tabIndex={0}
         onClick={handleClick}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
+        data-onboarding-target="set_sheet"
         className="relative bg-surface-raised border border-border p-3 transition-colors cursor-pointer hover:bg-surface-hover"
         style={{
           ...(isNow ? { borderColor: 'var(--color-accent)', boxShadow: 'var(--shadow-now)' } : {}),
