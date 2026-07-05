@@ -71,6 +71,7 @@ export function TimetableSetBlock({
     <div
       role="button"
       tabIndex={0}
+      data-onboarding-target="set_sheet"
       onClick={handleClick}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick() } }}
       style={{ ...style, position: 'absolute', inset: 0 }}
@@ -103,6 +104,7 @@ export function TimetableSetBlock({
           <button
             onClick={onToggleGoing}
             title={isGoing ? 'Remove from my sets' : 'Add to my sets'}
+            data-onboarding-target="picks"
             className="w-5 h-5 flex items-center justify-center rounded-[3px] border"
             style={
               isGoing || isNow

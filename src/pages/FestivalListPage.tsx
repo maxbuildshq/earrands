@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useFestivals } from '../hooks/useFestivalData'
+import { useAutoRedirect, isOngoing } from '../hooks/useAutoRedirect'
 import type { Festival } from '../types/database'
 import { RequestFestivalCTA } from '../components/festival/RequestFestivalCTA'
 import { FollowButton } from '../components/festival/FollowButton'
@@ -19,18 +20,27 @@ function formatDateRange(start: string, end: string): string {
 }
 
 function isPast(festival: Festival): boolean {
-  const end = new Date(festival.end_date + 'T23:59:59')
+  const end = new Date(festival.end_date + 'T00:00:00')
+  end.setDate(end.getDate() + 1)
+  end.setHours(7, 0, 0, 0)
   return end < new Date()
 }
 
 export function FestivalListPage() {
   const { data: festivals = [], isLoading } = useFestivals()
   const [showPast, setShowPast] = useState(false)
+  const { redirectTo, isChecking } = useAutoRedirect()
 
-  const upcoming = festivals.filter(f => !isPast(f))
+  if (redirectTo) {
+    posthog.capture('festival_auto_opened', { festival_slug: redirectTo.split('/')[2] })
+    return <Navigate to={redirectTo} replace />
+  }
+
+  const ongoing = festivals.filter(f => isOngoing(f))
+  const upcoming = festivals.filter(f => !isPast(f) && !isOngoing(f))
   const past = festivals.filter(f => isPast(f))
 
-  if (isLoading) {
+  if (isLoading || isChecking) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-text-secondary font-mono text-sm tracking-wider animate-pulse">LOADING FESTIVALS...</div>
@@ -41,6 +51,17 @@ export function FestivalListPage() {
   return (
     <div className="pt-6 space-y-8">
       <RequestFestivalCTA />
+
+      {ongoing.length > 0 && (
+        <section>
+          <Heading variant="section" className="text-accent mb-3">Ongoing</Heading>
+          <div className="space-y-3">
+            {ongoing.map(f => (
+              <FestivalCard key={f.id} festival={f} ongoing />
+            ))}
+          </div>
+        </section>
+      )}
 
       {upcoming.length > 0 && (
         <section>
@@ -73,15 +94,21 @@ export function FestivalListPage() {
   )
 }
 
-function FestivalCard({ festival }: { festival: Festival }) {
+function FestivalCard({ festival, ongoing }: { festival: Festival; ongoing?: boolean }) {
   const past = isPast(festival)
-  const showFollow = !past && !festival.timetable_announced
+  const showFollow = !past && !ongoing && !festival.timetable_announced
 
   return (
-    <div className={`border border-border ${past ? 'bg-surface-raised/50' : 'bg-surface-raised'}`}>
+    <div
+      className={`relative border border-border ${past ? 'bg-surface-raised/50' : 'bg-surface-raised'}`}
+      style={ongoing ? { borderColor: 'var(--color-accent)', boxShadow: 'var(--shadow-now)' } : undefined}
+    >
+      {ongoing && (
+        <div className="absolute top-0 left-0 w-1.5 h-full bg-accent animate-pulse" />
+      )}
       <Link
         to={`/festivals/${festival.slug}/schedule`}
-        onClick={() => posthog.capture('festival_selected', { festival_slug: festival.slug, festival_name: festival.name, is_past: past })}
+        onClick={() => posthog.capture('festival_selected', { festival_slug: festival.slug, festival_name: festival.name, is_past: past, is_ongoing: !!ongoing })}
         className="block p-4 transition-colors hover:bg-surface-hover"
       >
         <div className="flex items-start justify-between gap-3">
@@ -98,7 +125,9 @@ function FestivalCard({ festival }: { festival: Festival }) {
             </div>
           </div>
           <div className="shrink-0">
-            {past ? (
+            {ongoing ? (
+              <Badge variant="live">Now</Badge>
+            ) : past ? (
               <Badge variant="outline">Past</Badge>
             ) : festival.timetable_announced ? (
               <Badge variant="accent">Timetable</Badge>

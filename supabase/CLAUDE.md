@@ -34,6 +34,7 @@ festival_requests  id, user_id, raw_name, region (nullable), notified_at (nullab
 
 - `015_festival_requests_notified_at.sql` — adds `notified_at` to `festival_requests` (dedup pattern, same as `festival_follows`)
 - `016_artist_enrichment.sql` — adds enrichment columns to `artists` (`image_url`, `instagram_url`, `soundcloud_url`, `soundcloud_embed_url`, `bandcamp_url`, `discogs_id`, `enriched_at`) and `published boolean` to `festivals`
+- `029_welcome_email.sql` — `welcome_emails` dedup table (RLS on, no policies — service-role only) + pg_net trigger on `auth.users` that calls the `welcome-email` edge function on email confirmation. Needs a vault secret `welcome_email_secret` matching the edge function's `WELCOME_EMAIL_SECRET`; function also needs `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL` secrets.
 
 ## RLS Summary
 

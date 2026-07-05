@@ -209,6 +209,7 @@ export function TimetableGrid({
                 onClick={onOpenStages}
                 title="Stages"
                 aria-label="Stages"
+                data-onboarding-target="stage_filter"
                 style={{ height: RULER_H }}
                 className="w-full border-b border-lane-line flex items-center gap-1 px-2"
               >
@@ -358,7 +359,7 @@ export function TimetableGrid({
 
       {authOpen && (
         <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthOpen(false)}>
-          <AuthPrompt message="Create an account to mark sets you're going to and rate them." />
+          <AuthPrompt source="set_action" message="Create an account to pick your sets. We'll flag the clashes — and you get a schedule you can send to the group." />
         </BottomSheet>
       )}
     </>

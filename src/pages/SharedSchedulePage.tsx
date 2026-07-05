@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
+import posthog from 'posthog-js'
 import { useFestival, useSets } from '../hooks/useFestivalData'
 import { useSharedScheduleByCode } from '../hooks/useSharedSchedule'
 import { useUserPlans } from '../hooks/useUserPlans'
@@ -27,6 +28,10 @@ export function SharedSchedulePage() {
   const [authOpen, setAuthOpen] = useState(false)
 
   const sharedSetIds = useMemo(() => new Set(shared?.set_ids ?? []), [shared])
+
+  useEffect(() => {
+    if (shared) posthog.capture('share_link_opened', { share_code: code, set_count: shared.set_ids.length })
+  }, [shared, code])
 
   const sharedSets = useMemo(() => {
     return sets
@@ -101,7 +106,7 @@ export function SharedSchedulePage() {
               onRate={() => {
                 if (!user) setAuthOpen(true)
               }}
-              onOpenSheet={() => setSheetSet(set)}
+              onOpenSheet={() => { posthog.capture('set_sheet_opened', { set_id: set.id }); setSheetSet(set) }}
             />
           </div>
         )
@@ -148,7 +153,7 @@ export function SharedSchedulePage() {
 
       {authOpen && (
         <BottomSheet title="SIGN UP TO SAVE" onClose={() => setAuthOpen(false)}>
-          <AuthPrompt message="Create an account to save this schedule." />
+          <AuthPrompt source="shared_schedule" message="Create an account to save this schedule." />
         </BottomSheet>
       )}
     </div>

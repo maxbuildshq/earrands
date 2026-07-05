@@ -1,16 +1,23 @@
+import { useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import posthog from 'posthog-js'
 
 type Props = {
   message: string
+  source: 'set_action' | 'follow' | 'request' | 'shared_schedule'
 }
 
 /**
  * Shown inside a BottomSheet when an anonymous user triggers a login-gated action
  * (request a festival / follow for timetable alerts). The action is the conversion moment.
  */
-export function AuthPrompt({ message }: Props) {
+export function AuthPrompt({ message, source }: Props) {
   const location = useLocation()
   const returnTo = location.pathname + location.search
+
+  useEffect(() => {
+    posthog.capture('auth_prompt_shown', { source })
+  }, [source])
 
   return (
     <div className="px-4 pb-8 pt-1">
