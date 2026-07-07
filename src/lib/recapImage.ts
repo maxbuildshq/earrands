@@ -242,7 +242,6 @@ export function drawRecapCard(
         const s = col[ri]
         const st = favStyle(s, scale)
         const lines = rowLinesCol(s, st, COL_W)
-        const tier = tiers.get(s.id) ?? 'standard'
         ctx.font = fontStr(font, st.size)
         ctx.fillStyle = t.ink
         if (ri > 0) {
