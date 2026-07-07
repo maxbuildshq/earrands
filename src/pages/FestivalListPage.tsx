@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useFestivals } from '../hooks/useFestivalData'
 import { useAutoRedirect, isOngoing } from '../hooks/useAutoRedirect'
+import { useRecapEligibility } from '../hooks/useRecapEligibility'
+import { isEnded } from '../lib/recap'
 import type { Festival } from '../types/database'
 import { RequestFestivalCTA } from '../components/festival/RequestFestivalCTA'
+import { RecapBanner } from '../components/festival/RecapBanner'
 import { FollowButton } from '../components/festival/FollowButton'
 import { Heading } from '../components/ui/Heading'
 import { Badge } from '../components/ui/Badge'
@@ -19,17 +22,12 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-GB', opts)} - ${e.toLocaleDateString('en-GB', opts)} ${s.getFullYear()}`
 }
 
-function isPast(festival: Festival): boolean {
-  const end = new Date(festival.end_date + 'T00:00:00')
-  end.setDate(end.getDate() + 1)
-  end.setHours(7, 0, 0, 0)
-  return end < new Date()
-}
-
 export function FestivalListPage() {
   const { data: festivals = [], isLoading } = useFestivals()
   const [showPast, setShowPast] = useState(false)
   const { redirectTo, isChecking } = useAutoRedirect()
+  const recap = useRecapEligibility(festivals)
+  const navigate = useNavigate()
 
   if (redirectTo) {
     posthog.capture('festival_auto_opened', { festival_slug: redirectTo.split('/')[2] })
@@ -37,8 +35,8 @@ export function FestivalListPage() {
   }
 
   const ongoing = festivals.filter(f => isOngoing(f))
-  const upcoming = festivals.filter(f => !isPast(f) && !isOngoing(f))
-  const past = festivals.filter(f => isPast(f))
+  const upcoming = festivals.filter(f => !isEnded(f) && !isOngoing(f))
+  const past = festivals.filter(f => isEnded(f))
 
   if (isLoading || isChecking) {
     return (
@@ -50,6 +48,15 @@ export function FestivalListPage() {
 
   return (
     <div className="pt-6 space-y-8">
+      {recap && (
+        <RecapBanner
+          festival={recap.festival}
+          level={recap.level}
+          surface="list"
+          onOpen={() => navigate(`/festivals/${recap.festival.slug}/schedule?recap=1`)}
+        />
+      )}
+
       <RequestFestivalCTA />
 
       {ongoing.length > 0 && (
@@ -95,7 +102,7 @@ export function FestivalListPage() {
 }
 
 function FestivalCard({ festival, ongoing }: { festival: Festival; ongoing?: boolean }) {
-  const past = isPast(festival)
+  const past = isEnded(festival)
   const showFollow = !past && !ongoing && !festival.timetable_announced
 
   return (
