@@ -7,7 +7,7 @@ import { TEMPLATES, DISPLAY_FONT, drawSchedulePage, buildSharePages, buildShareF
 import { computeSetTiers } from '../../lib/shareLayout'
 import type { SchedulePage, SplitMode } from '../../lib/shareLayout'
 import { useCreateSharedSchedule } from '../../hooks/useSharedSchedule'
-import { downloadBlob } from '../../lib/download'
+import { nativeDownload, nativeShare } from '../../lib/download'
 import type { SetWithStage } from '../../types/database'
 
 type Props = {
@@ -143,26 +143,11 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
       const shareUrl = `https://earrands.app/app/festivals/${festivalSlug}/shared/${code}`
 
       const files = await renderAllPages()
-      const method = navigator.canShare?.({ files })
-        ? 'native_share_files'
-        : typeof navigator.share === 'function' ? 'native_share_link' : 'download_fallback'
+      const method = await nativeShare(files, {
+        title: `My ${festivalName} schedule`,
+        text: `My ${festivalName} lineup\n${shareUrl}`,
+      })
       posthog.capture('schedule_shared', { ...eventProps(), share_code: code, method })
-      if (navigator.canShare?.({ files })) {
-        await navigator.share({
-          files,
-          title: `My ${festivalName} schedule`,
-          text: `My ${festivalName} lineup\n${shareUrl}`,
-        })
-      } else if (navigator.share) {
-        for (const f of files) downloadBlob(f, f.name)
-        await navigator.share({
-          title: `My ${festivalName} schedule`,
-          text: `My ${festivalName} lineup`,
-          url: shareUrl,
-        })
-      } else {
-        for (const f of files) downloadBlob(f, f.name)
-      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') setError('Could not share — try Download instead.')
     } finally {
@@ -173,11 +158,7 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
   const handleDownload = async () => {
     const files = await renderAllPages()
     posthog.capture('schedule_downloaded', eventProps())
-    if (navigator.canShare?.({ files })) {
-      try { await navigator.share({ files }) } catch { for (const f of files) downloadBlob(f, f.name) }
-    } else {
-      for (const f of files) downloadBlob(f, f.name)
-    }
+    await nativeDownload(files)
   }
 
   return (

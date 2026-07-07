@@ -247,7 +247,7 @@ export function SchedulePage() {
             <Button variant="segment" active={!picksOnly} fullWidth={false} onClick={() => choosePicks(false)} className="px-3 py-2">
               All
             </Button>
-            <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border whitespace-nowrap">
+            <Button variant="segment" active={picksOnly} fullWidth={false} onClick={() => choosePicks(true)} className="px-3 py-2 border-l border-border whitespace-nowrap" data-onboarding-target="share">
               Picks ({picksCount})
             </Button>
           </div>
