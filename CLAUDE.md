@@ -50,6 +50,9 @@ src/
     dates.ts                 # getDays(), formatDayLabel(), isAfterMidnight(), toSortableTime()
     shareImage.ts            # canvas 1080×1920 poster renderer — drawSchedulePage(), buildSharePages(), TEMPLATES; display font Anton (ADR 009 addendum)
     shareLayout.ts           # share-export pure logic — set tiers (soundcloud_followers k-means), pagination, columns
+    recap.ts                 # post-festival recap pure logic — buildRecapStats(), isEnded(), recap window
+    recapImage.ts            # canvas 1080×1920 recap card renderer — drawRecapCard(); single image, no pagination
+    download.ts              # downloadBlob() helper shared by share + recap sheets
   hooks/                     # useFestivalData, useUserPlan, useFestivalFollows, useFestivalRequests
   pages/                     # FestivalListPage, SchedulePage, MySchedulePage, Login/SignUp
   components/

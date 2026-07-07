@@ -7,6 +7,7 @@ import { TEMPLATES, DISPLAY_FONT, drawSchedulePage, buildSharePages, buildShareF
 import { computeSetTiers } from '../../lib/shareLayout'
 import type { SchedulePage, SplitMode } from '../../lib/shareLayout'
 import { useCreateSharedSchedule } from '../../hooks/useSharedSchedule'
+import { downloadBlob } from '../../lib/download'
 import type { SetWithStage } from '../../types/database'
 
 type Props = {
@@ -275,15 +276,4 @@ export function ShareScheduleSheet({ festivalName, festivalId, festivalSlug, set
       </div>
     </BottomSheet>
   )
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
 }

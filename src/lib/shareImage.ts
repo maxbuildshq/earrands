@@ -300,7 +300,7 @@ export function drawSchedulePage(
   ctx.fillText(footerText, W - PAD - ctx.measureText(footerText).width, FOOTER_BASELINE)
 }
 
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
   let line = ''

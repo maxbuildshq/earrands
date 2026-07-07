@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import posthog from 'posthog-js'
 import { useFestival, useStages, useSets } from '../hooks/useFestivalData'
 import { useImagePreload } from '../hooks/useImagePreload'
@@ -16,6 +16,9 @@ import { SetSheet } from '../components/schedule/SetSheet'
 import { LineupView } from '../components/schedule/LineupView'
 import { TimetableGrid } from '../components/schedule/timetable/TimetableGrid'
 import { ShareScheduleSheet } from '../components/festival/ShareScheduleSheet'
+import { RecapBanner } from '../components/festival/RecapBanner'
+import { RecapSheet } from '../components/festival/RecapSheet'
+import { buildRecapStats, isInRecapWindow } from '../lib/recap'
 import { OnboardingHints, ClashMock, PosterMock } from '../components/onboarding/OnboardingHints'
 import { Button } from '../components/ui/Button'
 import { Heading } from '../components/ui/Heading'
@@ -35,7 +38,7 @@ export function SchedulePage() {
   const { data: sets = [] } = useSets(festival?.id)
   useImagePreload(sets)
   const { planSetIds, isGoing, toggleGoing } = useUserPlans()
-  const { getRating, setRating } = useUserRatings()
+  const { getRating, setRating, ratings } = useUserRatings()
   const now = useNow()
   const { revealedId, reveal } = useRevealTooltip()
 
@@ -48,6 +51,8 @@ export function SchedulePage() {
   const [sheetSet, setSheetSet] = useState<SetWithStage | null>(null)
   const [picksOnly, setPicksOnly] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [recapOpen, setRecapOpen] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
   const nowRef = useRef<HTMLDivElement>(null)
   const hasScrolled = useRef(false)
   const [layoutMode, setLayoutMode] = useState<'timetable' | 'list'>(
@@ -109,6 +114,22 @@ export function SchedulePage() {
   )
   // Festival-scoped: planSetIds spans all festivals, so count this festival's sets only.
   const picksCount = mySets.length
+
+  // Post-festival recap — ratings arrive cross-festival; buildRecapStats scopes them via `sets`.
+  // No useMemo: planSetIds/ratings are fresh objects each render, so a memo would never hit.
+  const recapStats = buildRecapStats({ sets, planSetIds, ratings })
+  const showRecap = !!festival && !!user && isInRecapWindow(festival) && recapStats.level !== 'none'
+
+  // Deep link from the festival-list banner (`?recap=1`) — derived, so no effect needed.
+  const recapSheetOpen = recapOpen || (searchParams.get('recap') === '1' && showRecap)
+  const closeRecap = () => {
+    setRecapOpen(false)
+    if (searchParams.get('recap') === '1') {
+      const next = new URLSearchParams(searchParams)
+      next.delete('recap')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   const filteredSets = useMemo(() => {
     return sets
@@ -191,6 +212,9 @@ export function SchedulePage() {
   if (!festival.timetable_announced) {
     return (
       <div className="pt-4">
+        {showRecap && (
+          <RecapBanner festival={festival} level={recapStats.level} surface="schedule" onOpen={() => setRecapOpen(true)} />
+        )}
         {days.length > 0 && (
           <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
         )}
@@ -201,6 +225,9 @@ export function SchedulePage() {
           isGoing={(id) => isGoing(id)}
           onToggleGoing={(id) => toggleGoing(id)}
         />
+        {recapSheetOpen && (
+          <RecapSheet festival={festival} stats={recapStats} onClose={closeRecap} />
+        )}
       </div>
     )
   }
@@ -209,6 +236,10 @@ export function SchedulePage() {
 
   return (
     <div className="pt-4">
+      {showRecap && (
+        <RecapBanner festival={festival} level={recapStats.level} surface="schedule" onOpen={() => setRecapOpen(true)} />
+      )}
+
       {/* Control row: left cluster (All/Picks + Share) · right cluster (Stages + mode toggle) */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-0.5">
@@ -387,6 +418,10 @@ export function SchedulePage() {
           sets={mySets}
           onClose={() => setShareOpen(false)}
         />
+      )}
+
+      {recapSheetOpen && (
+        <RecapSheet festival={festival} stats={recapStats} onClose={closeRecap} />
       )}
 
       {stagesOpen && (
