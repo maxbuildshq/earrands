@@ -5,7 +5,7 @@ import { Button } from '../ui/Button'
 import { TEMPLATES, DISPLAY_FONT } from '../../lib/shareImage'
 import { drawRecapCard, buildRecapFilename } from '../../lib/recapImage'
 import { computeSetTiers } from '../../lib/shareLayout'
-import { downloadBlob } from '../../lib/download'
+import { nativeDownload, nativeShare } from '../../lib/download'
 import { formatDateRange } from '../../lib/dates'
 import type { RecapStats } from '../../lib/recap'
 import type { Festival } from '../../types/database'
@@ -76,27 +76,11 @@ export function RecapSheet({ festival, stats, onClose }: Props) {
     setError('')
     try {
       const file = await renderFile()
-      const files = [file]
-      const method = navigator.canShare?.({ files })
-        ? 'native_share_files'
-        : typeof navigator.share === 'function' ? 'native_share_link' : 'download_fallback'
+      const method = await nativeShare([file], {
+        title: `My ${festival.name} recap`,
+        text: `My ${festival.name} recap\nhttps://earrands.app`,
+      })
       posthog.capture('recap_shared', { ...eventProps(), method })
-      if (navigator.canShare?.({ files })) {
-        await navigator.share({
-          files,
-          title: `My ${festival.name} recap`,
-          text: `My ${festival.name} recap\nhttps://earrands.app`,
-        })
-      } else if (navigator.share) {
-        downloadBlob(file, file.name)
-        await navigator.share({
-          title: `My ${festival.name} recap`,
-          text: `My ${festival.name} recap`,
-          url: 'https://earrands.app',
-        })
-      } else {
-        downloadBlob(file, file.name)
-      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') setError('Could not share — try Download instead.')
     } finally {
@@ -107,7 +91,7 @@ export function RecapSheet({ festival, stats, onClose }: Props) {
   const handleDownload = async () => {
     const file = await renderFile()
     posthog.capture('recap_downloaded', eventProps())
-    downloadBlob(file, file.name)
+    await nativeDownload([file])
   }
 
   return (

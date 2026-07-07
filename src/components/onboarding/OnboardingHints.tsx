@@ -153,7 +153,11 @@ export function OnboardingHints() {
   }
 
   return (
-    <div className="border border-accent px-3 py-2.5 mt-2 flex items-center gap-3 animate-pulse-glow">
+    <div className="relative border-l-[3px] border-conflict bg-conflict/10 px-3 py-2.5 mt-2 flex items-center gap-3">
+      <div
+        className="absolute top-0 left-0 right-0 h-1.5"
+        style={{ background: 'repeating-linear-gradient(135deg, var(--color-conflict) 0 7px, var(--color-surface) 7px 14px)' }}
+      />
       {visual}
       <p className="flex-1 font-mono text-sm text-text-primary leading-snug">{text}</p>
       <button
