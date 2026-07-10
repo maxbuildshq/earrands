@@ -3,7 +3,7 @@ import type { BioResearch } from './types.js'
 
 function buildPrompt(artistName: string, research: BioResearch): string {
   const parts: string[] = []
-  parts.push(`Generate an artist bio (2-3 short paragraphs) for "${artistName}".`)
+  parts.push(`Generate an artist bio (2-3 short paragraphs, 3-5 sentences total across the whole bio) for "${artistName}".`)
   parts.push('Output ONLY the bio text, nothing else — no quotes, no prefix, no explanation, no markdown.')
   parts.push('Use blank lines between paragraphs.')
   parts.push('')
@@ -47,7 +47,8 @@ export function generateArtistBio(
   const prompt = buildPrompt(artistName, research)
 
   try {
-    const result = execFileSync('claude', ['-p', prompt, '--model', 'sonnet'], {
+    const result = execFileSync('claude', ['-p', '--model', 'sonnet'], {
+      input: prompt,
       encoding: 'utf-8',
       timeout: 120_000,
       env: process.env,
@@ -61,7 +62,7 @@ export function generateArtistBio(
     bio = bio.replace(/  +/g, ' ').trim()
     return bio
   } catch (err: any) {
-    const msg = err.stderr?.toString().trim() || err.message || String(err)
+    const msg = err.stderr?.toString().trim() || err.stdout?.toString().trim() || err.message || String(err)
     console.error(`\n  Claude CLI error for ${artistName}: ${msg}`)
     return null
   }
