@@ -9,6 +9,7 @@ import { useAdminFestival, useUpdateFestival, useToggleFestivalField, useUpdateS
 import { useStages, useSets } from '../../hooks/useFestivalData'
 import { useSendNotification } from '../../hooks/useAdminNotifications'
 import { useCreateJob } from '../../hooks/useAdminJobs'
+import { SetArtistCompare } from '../../components/admin/SetArtistCompare'
 
 function formatDate(d: string) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -85,7 +86,8 @@ export default function AdminFestivalDetail() {
     )
   }
 
-  const uniqueArtists = new Set(sets.map(s => s.artist_name))
+  // Distinct parsed artists (matches the Sets ↔ Artists table), not unique raw set strings
+  const uniqueArtists = new Set(sets.flatMap(s => (s.set_artists ?? []).map(sa => sa.artists.name)))
   const days = [...new Set(sets.map(s => s.day))].sort()
 
   function handleSave() {
@@ -120,7 +122,7 @@ export default function AdminFestivalDetail() {
   }
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-6xl">
       <div className="flex items-center gap-4">
         <Link to="/admin/festivals" className="font-mono text-xs text-text-secondary hover:text-accent transition-colors uppercase tracking-wider">
           &larr; Festivals
@@ -275,6 +277,12 @@ export default function AdminFestivalDetail() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Sets vs parsed artists comparison */}
+      <section className="border border-border p-6 space-y-4">
+        <Heading variant="section">Sets ↔ Artists</Heading>
+        <SetArtistCompare sets={sets} stages={stages} />
       </section>
     </div>
   )

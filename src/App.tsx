@@ -16,6 +16,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'))
 const AdminFestivalList = lazy(() => import('./pages/admin/AdminFestivalList'))
 const AdminFestivalDetail = lazy(() => import('./pages/admin/AdminFestivalDetail'))
 const AdminArtistList = lazy(() => import('./pages/admin/AdminArtistList'))
+const AdminSets = lazy(() => import('./pages/admin/AdminSets'))
 const AdminArtistDetail = lazy(() => import('./pages/admin/AdminArtistDetail'))
 const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'))
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'))
@@ -56,6 +57,7 @@ function App() {
               <Route path="festivals/:id" element={<AdminFestivalDetail />} />
               <Route path="artists" element={<AdminArtistList />} />
               <Route path="artists/:id" element={<AdminArtistDetail />} />
+              <Route path="sets" element={<AdminSets />} />
               <Route path="requests" element={<AdminRequests />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="jobs" element={<AdminJobs />} />

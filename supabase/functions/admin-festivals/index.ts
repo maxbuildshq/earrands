@@ -56,13 +56,14 @@ Deno.serve(async (req) => {
       if (!festivals) return json([])
 
       const stats = await Promise.all(festivals.map(async (f) => {
-        const [stages, sets, artists, follows] = await Promise.all([
+        const [stages, sets, setArtists, follows] = await Promise.all([
           supabase.from('stages').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
           supabase.from('sets').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
-          supabase.from('sets').select('artist_name').eq('festival_id', f.id),
+          // Distinct parsed artists: join set_artists → artists via the festival's sets
+          supabase.from('set_artists').select('artist_id, sets!inner(festival_id)').eq('sets.festival_id', f.id),
           supabase.from('festival_follows').select('id', { count: 'exact', head: true }).eq('festival_id', f.id),
         ])
-        const uniqueArtists = new Set(artists.data?.map(s => s.artist_name) ?? [])
+        const uniqueArtists = new Set(setArtists.data?.map(sa => sa.artist_id) ?? [])
         return {
           id: f.id,
           stages_count: stages.count ?? 0,
@@ -141,6 +142,28 @@ Deno.serve(async (req) => {
         if (error.code === '23505') return json({ error: 'A stage with this name already exists for this festival' }, 409)
         return json({ error: error.message }, 500)
       }
+      return json(data)
+    }
+
+    if (action === 'update_set') {
+      const { set_id } = body
+      if (!set_id) return json({ error: 'Missing set_id' }, 400)
+
+      // Only the schedule fields are editable here (last-minute organiser changes)
+      const allowed = ['stage_id', 'start_time', 'end_time', 'day']
+      const filtered: Record<string, unknown> = {}
+      for (const key of allowed) {
+        if (key in body) filtered[key] = body[key]
+      }
+      if (Object.keys(filtered).length === 0) return json({ error: 'No editable fields provided' }, 400)
+
+      const { data, error } = await supabase
+        .from('sets')
+        .update(filtered)
+        .eq('id', set_id)
+        .select()
+        .single()
+      if (error) return json({ error: error.message }, 500)
       return json(data)
     }
 

@@ -16,7 +16,7 @@ import {
 } from '../../components/admin/InlineEdit'
 
 const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed'] as const
-const PAGE_SIZES = [50, 100, 200] as const
+const PAGE_SIZES = [50, 100, 200, 300] as const
 
 function ImageHover({ src }: { src: string | null }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
