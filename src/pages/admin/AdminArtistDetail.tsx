@@ -1,48 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Heading } from '../../components/ui/Heading'
 import { Button } from '../../components/ui/Button'
-import { Input } from '../../components/ui/Input'
-import { Label } from '../../components/ui/Label'
 import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBadge'
 import { SourceLabel } from '../../components/admin/SourceLabel'
+import {
+  InlineEdit, InlineLocationEdit,
+  scHandle, igHandle, bcHandle,
+  scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
+  discogsUrl,
+} from '../../components/admin/InlineEdit'
 import { useAdminArtist, useUpdateArtist, useUpdateAndRefetch, useActivateBio } from '../../hooks/useAdminArtists'
 import { useCreateJob, useAdminJobs } from '../../hooks/useAdminJobs'
-import type { Artist } from '../../types/database'
-
-function ExternalLink({ href, label }: { href: string | null; label: string }) {
-  if (!href) return <span className="font-mono text-xs text-border">—</span>
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="font-mono text-xs text-accent hover:underline truncate block max-w-xs"
-    >
-      {label}
-    </a>
-  )
-}
-
-type EditForm = {
-  name: string
-  soundcloud_url: string
-  instagram_url: string
-  bandcamp_url: string
-  image_url: string
-  city: string
-  country_code: string
-}
 
 export default function AdminArtistDetail() {
   const { id } = useParams<{ id: string }>()
   const { data: artist, isLoading } = useAdminArtist(id)
-
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState<EditForm>({
-    name: '', soundcloud_url: '', instagram_url: '', bandcamp_url: '',
-    image_url: '', city: '', country_code: '',
-  })
 
   const [searchKeywords, setSearchKeywords] = useState('')
 
@@ -52,20 +25,6 @@ export default function AdminArtistDetail() {
   const createJob = useCreateJob()
   useAdminJobs()
 
-  useEffect(() => {
-    if (artist) {
-      setForm({
-        name: artist.name,
-        soundcloud_url: artist.soundcloud_url ?? '',
-        instagram_url: artist.instagram_url ?? '',
-        bandcamp_url: artist.bandcamp_url ?? '',
-        image_url: artist.image_url ?? '',
-        city: artist.city ?? '',
-        country_code: artist.country_code ?? '',
-      })
-    }
-  }, [artist])
-
   if (isLoading || !artist) {
     return (
       <div className="space-y-8">
@@ -74,32 +33,21 @@ export default function AdminArtistDetail() {
     )
   }
 
-  const scUrlChanged = form.soundcloud_url !== (artist.soundcloud_url ?? '')
-
-  function handleSave() {
-    if (scUrlChanged && form.soundcloud_url) {
-      updateAndRefetch.mutate(
-        { artistId: artist!.id, updates: formToUpdates() },
-        { onSuccess: () => setEditing(false) },
-      )
+  function handleInlineSave(field: string, value: string, oldUrl: string | null) {
+    if (field === 'soundcloud_url' && value !== (oldUrl ?? '')) {
+      updateAndRefetch.mutate({ artistId: artist!.id, updates: { [field]: value || null } })
     } else {
-      update.mutate(
-        { id: artist!.id, ...formToUpdates() },
-        { onSuccess: () => setEditing(false) },
-      )
+      update.mutate({ id: artist!.id, [field]: value || null } as any)
     }
   }
 
-  function formToUpdates(): Partial<Artist> {
-    return {
-      name: form.name,
-      soundcloud_url: form.soundcloud_url || null,
-      instagram_url: form.instagram_url || null,
-      bandcamp_url: form.bandcamp_url || null,
-      image_url: form.image_url || null,
-      city: form.city || null,
-      country_code: form.country_code || null,
-    } as Partial<Artist>
+  function handleLocationSave(city: string, countryCode: string) {
+    update.mutate({ id: artist!.id, city: city || null, country_code: countryCode || null } as any)
+  }
+
+  function handleDiscogsSave(value: string) {
+    const digits = value.replace(/\D/g, '')
+    update.mutate({ id: artist!.id, discogs_id: digits ? Number(digits) : null } as any)
   }
 
   function handleStatusChange(newStatus: string) {
@@ -107,7 +55,7 @@ export default function AdminArtistDetail() {
       id: artist!.id,
       enrichment_status: newStatus,
       ...(newStatus === 'reviewed' ? { enriched_at: new Date().toISOString() } : {}),
-    } as Partial<Artist> & { id: string })
+    } as any)
   }
 
   return (
@@ -182,85 +130,86 @@ export default function AdminArtistDetail() {
 
       {/* Links & Fields */}
       <section className="border border-border p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <Heading variant="section">Profile & Links</Heading>
-          {!editing && (
-            <Button variant="secondary" fullWidth={false} onClick={() => setEditing(true)}>Edit</Button>
-          )}
-        </div>
+        <Heading variant="section">Profile & Links</Heading>
 
-        {editing ? (
-          <div className="space-y-4 max-w-lg">
+        <div className="grid grid-cols-2 gap-4 font-mono text-sm">
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Name</span>
+            <InlineEdit
+              value={artist.name}
+              displayValue={artist.name}
+              href={null}
+              onSave={val => handleInlineSave('name', val, null)}
+              placeholder="Name"
+            />
+          </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">SoundCloud</span>
+            <InlineEdit
+              value={artist.soundcloud_url ?? ''}
+              displayValue={scHandle(artist.soundcloud_url)}
+              href={artist.soundcloud_url}
+              onSave={val => handleInlineSave('soundcloud_url', val, artist.soundcloud_url)}
+              placeholder="soundcloud.com/..."
+              parse={scParse}
+              build={scBuild}
+            />
+          </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Instagram</span>
+            <InlineEdit
+              value={artist.instagram_url ?? ''}
+              displayValue={igHandle(artist.instagram_url)}
+              href={artist.instagram_url}
+              onSave={val => handleInlineSave('instagram_url', val, null)}
+              placeholder="instagram.com/..."
+              parse={igParse}
+              build={igBuild}
+            />
+          </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Bandcamp</span>
+            <InlineEdit
+              value={artist.bandcamp_url ?? ''}
+              displayValue={bcHandle(artist.bandcamp_url)}
+              href={artist.bandcamp_url}
+              onSave={val => handleInlineSave('bandcamp_url', val, null)}
+              placeholder="x.bandcamp.com"
+              parse={bcParse}
+              build={bcBuild}
+            />
+          </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Image</span>
+            <InlineEdit
+              value={artist.image_url ?? ''}
+              displayValue={artist.image_url ? 'View' : null}
+              href={artist.image_url}
+              onSave={val => handleInlineSave('image_url', val, null)}
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Location</span>
             <div>
-              <Label htmlFor="name">Name</Label>
-              <Input id="name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div>
-              <Label htmlFor="sc">SoundCloud URL</Label>
-              <Input id="sc" value={form.soundcloud_url} onChange={e => setForm(f => ({ ...f, soundcloud_url: e.target.value }))} />
-              {scUrlChanged && (
-                <p className="font-mono text-[10px] text-accent mt-1 uppercase tracking-wider">
-                  SC URL changed — dependent fields will be refetched on save
-                </p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="ig">Instagram URL</Label>
-              <Input id="ig" value={form.instagram_url} onChange={e => setForm(f => ({ ...f, instagram_url: e.target.value }))} />
-            </div>
-            <div>
-              <Label htmlFor="bc">Bandcamp URL</Label>
-              <Input id="bc" value={form.bandcamp_url} onChange={e => setForm(f => ({ ...f, bandcamp_url: e.target.value }))} />
-            </div>
-            <div>
-              <Label htmlFor="img">Image URL</Label>
-              <Input id="img" value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="city">City</Label>
-                <Input id="city" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
-              </div>
-              <div>
-                <Label htmlFor="cc">Country Code</Label>
-                <Input id="cc" value={form.country_code} onChange={e => setForm(f => ({ ...f, country_code: e.target.value }))} />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="primary" fullWidth={false} onClick={handleSave} disabled={update.isPending || updateAndRefetch.isPending}>
-                {(update.isPending || updateAndRefetch.isPending) ? 'Saving...' : scUrlChanged ? 'Save & Refetch' : 'Save'}
-              </Button>
-              <Button variant="secondary" fullWidth={false} onClick={() => setEditing(false)}>Cancel</Button>
+              <InlineLocationEdit
+                city={artist.city}
+                countryCode={artist.country_code}
+                onSave={handleLocationSave}
+              />
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 font-mono text-sm">
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">SoundCloud</span>
-              <ExternalLink href={artist.soundcloud_url} label={artist.soundcloud_url?.replace('https://soundcloud.com/', '') ?? ''} />
-            </div>
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">Instagram</span>
-              <ExternalLink href={artist.instagram_url} label={artist.instagram_url?.replace('https://www.instagram.com/', '@') ?? ''} />
-            </div>
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">Bandcamp</span>
-              <ExternalLink href={artist.bandcamp_url} label={artist.bandcamp_url?.replace('https://', '')?.replace('.bandcamp.com', '') ?? ''} />
-            </div>
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">Image</span>
-              <ExternalLink href={artist.image_url} label="View" />
-            </div>
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">Location</span>
-              <p className="text-text-primary">{[artist.city, artist.country_code].filter(Boolean).join(', ') || '—'}</p>
-            </div>
-            <div>
-              <span className="text-text-secondary text-xs uppercase tracking-wider">Discogs ID</span>
-              <p className="text-text-primary">{artist.discogs_id ?? '—'}</p>
-            </div>
+          <div>
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Discogs ID</span>
+            <InlineEdit
+              value={artist.discogs_id ? String(artist.discogs_id) : ''}
+              displayValue={artist.discogs_id ? String(artist.discogs_id) : null}
+              href={artist.discogs_id ? discogsUrl(artist.discogs_id) : null}
+              onSave={val => handleDiscogsSave(val)}
+              placeholder="id"
+            />
           </div>
-        )}
+        </div>
       </section>
 
       {/* Bio Comparison */}

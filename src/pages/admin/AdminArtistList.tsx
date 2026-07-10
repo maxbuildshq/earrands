@@ -8,24 +8,15 @@ import { SourceLabel } from '../../components/admin/SourceLabel'
 import { useAdminArtists, useBulkUpdateArtists, useUpdateArtist, useUpdateAndRefetch, useActivateBio } from '../../hooks/useAdminArtists'
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
 import { useCreateJob, useAdminJobs } from '../../hooks/useAdminJobs'
+import {
+  InlineEdit, InlineLocationEdit,
+  scHandle, igHandle, bcHandle,
+  scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
+  discogsUrl,
+} from '../../components/admin/InlineEdit'
 
 const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed'] as const
 const PAGE_SIZES = [50, 100, 200] as const
-
-function scHandle(url: string | null) {
-  if (!url) return null
-  return url.replace(/^https?:\/\/(www\.)?soundcloud\.com\//, '').replace(/\/$/, '')
-}
-
-function igHandle(url: string | null) {
-  if (!url) return null
-  return '@' + url.replace(/^https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '')
-}
-
-function bcHandle(url: string | null) {
-  if (!url) return null
-  return url.replace(/^https?:\/\//, '').replace(/\.bandcamp\.com\/?.*$/, '')
-}
 
 function ImageHover({ src }: { src: string | null }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -66,6 +57,7 @@ type ArtistRow = {
   soundcloud_url: string | null
   instagram_url: string | null
   bandcamp_url: string | null
+  discogs_id: number | null
   bio: string | null
   bio_festival: string | null
   bio_generated: string | null
@@ -142,139 +134,6 @@ function BioPopover({ artist }: { artist: ArtistRow }) {
         </div>
       )}
     </div>
-  )
-}
-
-function InlineEdit({
-  value,
-  displayValue,
-  href,
-  onSave,
-  placeholder,
-}: {
-  value: string
-  displayValue: string | null
-  href: string | null
-  onSave: (val: string) => void
-  placeholder: string
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(value)
-
-  if (editing) {
-    return (
-      <input
-        className="bg-transparent border-b border-accent text-accent font-mono text-sm w-full outline-none"
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={() => {
-          if (draft !== value) onSave(draft)
-          setEditing(false)
-        }}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { if (draft !== value) onSave(draft); setEditing(false) }
-          if (e.key === 'Escape') { setDraft(value); setEditing(false) }
-        }}
-        placeholder={placeholder}
-        autoFocus
-      />
-    )
-  }
-
-  if (!displayValue) {
-    return (
-      <span
-        className="text-border cursor-pointer hover:text-text-secondary"
-        onClick={() => { setDraft(value); setEditing(true) }}
-        title="Click to add"
-      >
-        —
-      </span>
-    )
-  }
-
-  return (
-    <div className="flex items-center gap-1 group">
-      <a href={href!} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline truncate block">
-        {displayValue}
-      </a>
-      <button
-        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent transition-opacity text-xs"
-        onClick={() => { setDraft(value); setEditing(true) }}
-        title="Edit"
-      >
-        ✎
-      </button>
-    </div>
-  )
-}
-
-function InlineLocationEdit({
-  city,
-  countryCode,
-  onSave,
-}: {
-  city: string | null
-  countryCode: string | null
-  onSave: (city: string, countryCode: string) => void
-}) {
-  const [editing, setEditing] = useState(false)
-  const [draftCity, setDraftCity] = useState(city ?? '')
-  const [draftCountry, setDraftCountry] = useState(countryCode ?? '')
-
-  function commit() {
-    if (draftCity !== (city ?? '') || draftCountry !== (countryCode ?? '')) {
-      onSave(draftCity, draftCountry)
-    }
-    setEditing(false)
-  }
-
-  function cancel() {
-    setDraftCity(city ?? '')
-    setDraftCountry(countryCode ?? '')
-    setEditing(false)
-  }
-
-  if (editing) {
-    return (
-      <div className="flex items-center gap-1">
-        <input
-          className="bg-transparent border-b border-accent text-accent font-mono text-sm w-20 outline-none"
-          value={draftCity}
-          onChange={e => setDraftCity(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') cancel()
-          }}
-          placeholder="City"
-          autoFocus
-        />
-        <input
-          className="bg-transparent border-b border-accent text-accent font-mono text-sm w-10 outline-none uppercase"
-          value={draftCountry}
-          onChange={e => setDraftCountry(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') commit()
-            if (e.key === 'Escape') cancel()
-          }}
-          placeholder="CC"
-          maxLength={2}
-        />
-      </div>
-    )
-  }
-
-  const display = [city, countryCode].filter(Boolean).join(', ')
-  return (
-    <span
-      className="text-text-secondary cursor-pointer hover:text-accent"
-      onClick={() => { setDraftCity(city ?? ''); setDraftCountry(countryCode ?? ''); setEditing(true) }}
-      title="Click to edit"
-    >
-      {display || '—'}
-    </span>
   )
 }
 
@@ -399,6 +258,11 @@ export default function AdminArtistList() {
     updateArtist.mutate({ id: artistId, city: city || null, country_code: countryCode || null } as any)
   }
 
+  function handleDiscogsSave(artistId: string, value: string) {
+    const digits = value.replace(/\D/g, '')
+    updateArtist.mutate({ id: artistId, discogs_id: digits ? Number(digits) : null } as any)
+  }
+
   function handlePageSizeChange(newSize: number) {
     setPageSize(newSize)
   }
@@ -485,12 +349,13 @@ export default function AdminArtistList() {
               <th className="px-3 py-2.5 text-left w-8">
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-accent" />
               </th>
-              <th className="px-2 py-2.5 text-left w-12"></th>
+              <th className="px-2 py-2.5 text-left w-12">Image</th>
               <th className="px-3 py-2.5 text-left">Name</th>
               <th className="px-3 py-2.5 text-left">Location</th>
               <th className="px-3 py-2.5 text-left">SoundCloud</th>
               <th className="px-3 py-2.5 text-left">Instagram</th>
               <th className="px-3 py-2.5 text-left">Bandcamp</th>
+              <th className="px-3 py-2.5 text-left">Discogs</th>
               <th className="px-3 py-2.5 text-left w-16">Bio</th>
               <th className="px-3 py-2.5 text-left">Status</th>
               <th className="px-3 py-2.5 text-left">Actions</th>
@@ -498,9 +363,9 @@ export default function AdminArtistList() {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-text-secondary">Loading...</td></tr>
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-text-secondary">Loading...</td></tr>
             ) : artists.length === 0 ? (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-text-secondary">No artists found.</td></tr>
+              <tr><td colSpan={11} className="px-4 py-8 text-center text-text-secondary">No artists found.</td></tr>
             ) : (
               artists.map((a, i) => (
                 <tr key={a.id} className="border-b border-border last:border-b-0 hover:bg-surface-raised transition-colors">
@@ -508,7 +373,14 @@ export default function AdminArtistList() {
                     <input type="checkbox" checked={selected.has(a.id)} onClick={e => toggleOne(a.id, i, e.shiftKey)} onChange={() => {}} className="accent-accent" />
                   </td>
                   <td className="px-2 py-3">
-                    <ImageHover src={a.image_url} />
+                    <InlineEdit
+                      value={a.image_url ?? ''}
+                      displayValue={a.image_url}
+                      href={null}
+                      onSave={val => handleInlineSave(a.id, 'image_url', val, null)}
+                      placeholder="https://..."
+                      renderDisplay={<ImageHover src={a.image_url} />}
+                    />
                   </td>
                   <td className="px-3 py-3">
                     <Link to={`/admin/artists/${a.id}`} className="font-bold text-text-primary hover:text-accent transition-colors">
@@ -529,6 +401,8 @@ export default function AdminArtistList() {
                       href={a.soundcloud_url}
                       onSave={val => handleInlineSave(a.id, 'soundcloud_url', val, a.soundcloud_url)}
                       placeholder="soundcloud.com/..."
+                      parse={scParse}
+                      build={scBuild}
                     />
                   </td>
                   <td className="px-3 py-3 max-w-[140px]">
@@ -538,6 +412,8 @@ export default function AdminArtistList() {
                       href={a.instagram_url}
                       onSave={val => handleInlineSave(a.id, 'instagram_url', val, null)}
                       placeholder="instagram.com/..."
+                      parse={igParse}
+                      build={igBuild}
                     />
                   </td>
                   <td className="px-3 py-3 max-w-[140px]">
@@ -547,6 +423,17 @@ export default function AdminArtistList() {
                       href={a.bandcamp_url}
                       onSave={val => handleInlineSave(a.id, 'bandcamp_url', val, null)}
                       placeholder="x.bandcamp.com"
+                      parse={bcParse}
+                      build={bcBuild}
+                    />
+                  </td>
+                  <td className="px-3 py-3 max-w-[100px]">
+                    <InlineEdit
+                      value={a.discogs_id ? String(a.discogs_id) : ''}
+                      displayValue={a.discogs_id ? String(a.discogs_id) : null}
+                      href={a.discogs_id ? discogsUrl(a.discogs_id) : null}
+                      onSave={val => handleDiscogsSave(a.id, val)}
+                      placeholder="id"
                     />
                   </td>
                   <td className="px-3 py-3">
