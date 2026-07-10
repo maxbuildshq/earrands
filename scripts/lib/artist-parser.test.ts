@@ -235,6 +235,40 @@ describe('parseArtistName', () => {
         role: 'member',
       })
     })
+
+    it('strips opening ceremony descriptor', () => {
+      expect(parseArtistName('James Holden & Surgeon (opening ceremony)')).toEqual({
+        collective: null,
+        members: ['James Holden', 'Surgeon'],
+        role: 'collab',
+      })
+    })
+  })
+
+  describe('presents / debuts (show concept, not a member)', () => {
+    it('drops the concept name after "presents"', () => {
+      expect(parseArtistName('A Guy Called Gerald presents Black Secret Technology')).toEqual({
+        collective: null,
+        members: ['A Guy Called Gerald'],
+        role: 'solo',
+      })
+    })
+
+    it('drops the concept name after "debuts"', () => {
+      expect(parseArtistName('Jeff Mills debuts STARGATE')).toEqual({
+        collective: null,
+        members: ['Jeff Mills'],
+        role: 'solo',
+      })
+    })
+
+    it('still splits a compound presenter before the concept name', () => {
+      expect(parseArtistName('James Holden & Surgeon present Group Therapy')).toEqual({
+        collective: null,
+        members: ['James Holden', 'Surgeon'],
+        role: 'collab',
+      })
+    })
   })
 
   describe('hosted by', () => {

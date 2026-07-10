@@ -74,6 +74,25 @@ export function useUpdateStage() {
   })
 }
 
+type SetUpdate = {
+  setId: string
+  stage_id?: string | null
+  start_time?: string | null
+  end_time?: string | null
+  day?: string
+}
+
+export function useUpdateSet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ setId, ...updates }: SetUpdate) =>
+      adminFetch('admin-festivals', { method: 'POST', body: { action: 'update_set', set_id: setId, ...updates } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sets'] })
+    },
+  })
+}
+
 export function useToggleFestivalField() {
   const queryClient = useQueryClient()
   return useMutation({

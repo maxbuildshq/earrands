@@ -110,16 +110,18 @@ Parsing in `scripts/lib/artist-parser.ts` (shared by `ingest.ts` and `parse-arti
 Pre-processing: strips `(live)`, trailing `Live`, and mid-name `Live` before qualifiers like `(` or `w/`.
 
 Parsing rules (priority order):
-1. Colon format: `"LSD: Luke Slater, Steve Bicknell and Function"`
-2. Parenthetical with `,` or `&`: `"Collabs 3000 (Chris Liebing & Speedy J)"`
-3. `w/`: `"STOOR w/ Aurora Halal, Azu Tiwaline"` (collective + members)
-4. `featuring` (case-insensitive)
-5. `F2F` (case-insensitive)
-6. `B2B` (case-insensitive)
-7. `vs`
-8. `x` (case-sensitive, space-x-space — won't match "DAX J")
-9. `&`
-10. Solo
+1. `hosted by`: `"Serum hosted by Carasel"` (main act + MC)
+2. `presents`/`present`/`debuts`/`debut`: `"A Guy Called Gerald presents Black Secret Technology"`, `"Jeff Mills debuts STARGATE"` — the part after the verb is a show concept, not a member, and is dropped; the artist(s) before it are re-parsed on their own so a compound presenter (`"James Holden & Surgeon present ..."`) still splits
+3. Colon format: `"LSD: Luke Slater, Steve Bicknell and Function"`
+4. Parenthetical with `,` or `&`: `"Collabs 3000 (Chris Liebing & Speedy J)"`
+5. `w/`: `"STOOR w/ Aurora Halal, Azu Tiwaline"` (collective + members)
+6. `featuring` (case-insensitive)
+7. `F2F` (case-insensitive)
+8. `B2B` (case-insensitive)
+9. `vs`
+10. `x` (case-sensitive, space-x-space — won't match "DAX J")
+11. `&`
+12. Solo
 
 ## Artist Enrichment
 
