@@ -495,11 +495,19 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
 
     if (!parsed.collective && parsed.members.length > 1) {
       const comboSortName = set.artist_name.toLowerCase().trim()
-      if (!processedArtists.has(comboSortName)) {
-        const scraperArtist = scrapedBios.get(comboSortName)
-        if (scraperArtist?.bio) {
-          processedArtists.add(comboSortName)
-          emitArtistUpsert(set.artist_name, comboSortName, false, scraperArtist.bio, scraperArtist.source_url ?? null, 'Combo bio for multi-artist set')
+      const scraperArtist = scrapedBios.get(comboSortName)
+      if (scraperArtist?.bio) {
+        for (const member of parsed.members) {
+          const memberSortName = member.toLowerCase().trim()
+          const memberBio = scrapedBios.get(memberSortName)
+          if (!memberBio?.bio) {
+            lines.push(`  -- Combo bio distributed from "${escSql(set.artist_name)}"`)
+            lines.push(`  UPDATE artists SET`)
+            lines.push(`    bio_festival = CASE WHEN bio_festival IS NULL THEN '${escSql(scraperArtist.bio)}' ELSE bio_festival END,`)
+            lines.push(`    bio_source = CASE WHEN bio_festival IS NULL THEN 'festival:${slug}' ELSE bio_source END`)
+            lines.push(`  WHERE sort_name = '${escSql(memberSortName)}';`)
+            lines.push('')
+          }
         }
       }
     }
@@ -527,17 +535,6 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       lines.push(`  VALUES (set_uuid, artist_uuid, '${parsed.role}', ${i + 1})`)
       lines.push(`  ON CONFLICT (set_id, artist_id) DO NOTHING;`)
     })
-
-    // Link combo artist entry for multi-artist sets that have a scraped combo bio
-    if (!parsed.collective && parsed.members.length > 1) {
-      const comboSortName = set.artist_name.toLowerCase().trim()
-      if (processedArtists.has(comboSortName)) {
-        lines.push(`  SELECT id INTO artist_uuid FROM artists WHERE sort_name = '${escSql(comboSortName)}';`)
-        lines.push(`  INSERT INTO set_artists (set_id, artist_id, role, billing_order)`)
-        lines.push(`  VALUES (set_uuid, artist_uuid, 'collab', 0)`)
-        lines.push(`  ON CONFLICT (set_id, artist_id) DO NOTHING;`)
-      }
-    }
 
     lines.push('')
   }

@@ -10,6 +10,7 @@ export type ParseResult = {
 // split into two separate artists, in any context (solo, B2B chain, collab, etc).
 // e.g. "Camo & Krooked" → stays one artist, not ["Camo", "Krooked"]
 const KNOWN_DUOS = [
+  'Blasha & Allatt',
   'Camo & Krooked',
   'Pola & Bryson',
   'Ed Rush & Optical',
@@ -116,9 +117,18 @@ export function parseArtistName(raw: string): ParseResult {
   // e.g. "A Guy Called Gerald presents Black Secret Technology" → members: ["A Guy Called Gerald"], role: "solo"
   // e.g. "Jeff Mills debuts STARGATE" → members: ["Jeff Mills"], role: "solo"
   // e.g. "James Holden & Surgeon present Group Therapy" → members: ["James Holden", "Surgeon"], role: "collab"
-  const presentsMatch = parseName.match(/^(.+?)\s+(?:presents?|debuts?)\s+.+$/i)
+  const presentsMatch = parseName.match(/^(.+?)\s+(?:presents?|debuts?)\s+(.+)$/i)
   if (presentsMatch) {
-    return parseArtistName(presentsMatch[1].trim())
+    const presenterResult = parseArtistName(presentsMatch[1].trim())
+    const conceptResult = parseArtistName(presentsMatch[2].trim())
+    if (conceptResult.collective) {
+      return {
+        collective: null,
+        members: [...presenterResult.members, ...conceptResult.members],
+        role: presenterResult.role === 'solo' ? 'collab' : presenterResult.role,
+      }
+    }
+    return presenterResult
   }
 
   // Colon format — only when ": " is followed by a comma-separated list
