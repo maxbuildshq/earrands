@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import posthog from 'posthog-js'
+import { trackMetaLead } from '../lib/consent'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
@@ -34,6 +35,7 @@ export function SignUpPage() {
       setLoading(false)
     } else {
       posthog.capture('user_signed_up', { email, marketing_consent: marketing })
+      trackMetaLead()
       setSuccess(true)
       setLoading(false)
     }

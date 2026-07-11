@@ -27,3 +27,6 @@ scraped/
 style-previews/
 enrichment-review/
 supabase/.temp/
+
+# marketing assets (large binaries, local pipeline)
+marketing/

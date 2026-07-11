@@ -9,6 +9,7 @@ import { SharedSchedulePage } from './pages/SharedSchedulePage'
 import { LoginPage } from './pages/LoginPage'
 import { SignUpPage } from './pages/SignUpPage'
 import { OfflineNotice } from './components/common/OfflineNotice'
+import { ConsentBanner } from './components/common/ConsentBanner'
 import { AdminGuard } from './components/admin/AdminGuard'
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
@@ -65,6 +66,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
           <OfflineNotice />
+          <ConsentBanner />
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
