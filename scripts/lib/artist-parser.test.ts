@@ -269,6 +269,14 @@ describe('parseArtistName', () => {
         role: 'collab',
       })
     })
+
+    it('extracts featured artists from the concept part', () => {
+      expect(parseArtistName('UR presents Depth Charge featuring Saul Williams')).toEqual({
+        collective: null,
+        members: ['UR', 'Saul Williams'],
+        role: 'collab',
+      })
+    })
   })
 
   describe('hosted by', () => {
@@ -344,6 +352,14 @@ describe('parseArtistName', () => {
   })
 
   describe('known-duo allowlist', () => {
+    it('does not split Blasha & Allatt', () => {
+      expect(parseArtistName('Blasha & Allatt')).toEqual({
+        collective: null,
+        members: ['Blasha & Allatt'],
+        role: 'solo',
+      })
+    })
+
     it('does not split Camo & Krooked', () => {
       expect(parseArtistName('Camo & Krooked')).toEqual({
         collective: null,
