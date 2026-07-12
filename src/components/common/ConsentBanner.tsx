@@ -21,7 +21,7 @@ export function ConsentBanner() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 bg-surface border-t-2 border-accent px-4 pt-4 pb-7">
       <p className="text-text-secondary text-sm leading-relaxed mb-3 max-w-xl mx-auto">
-        An ads pixel helps us see what you're into.
+        An ads pixel helps us see which features interest our users the most.
       </p>
       <div className="flex gap-2 max-w-xl mx-auto">
         <Button variant="secondary" onClick={() => decide('declined')}>Decline</Button>
