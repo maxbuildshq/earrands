@@ -1,5 +1,5 @@
 const CONSENT_KEY = 'earrands-consent'
-const META_PIXEL_ID = '449252812346571'
+const META_PIXEL_ID = '912561041880588'
 
 export type Consent = 'accepted' | 'declined'
 
