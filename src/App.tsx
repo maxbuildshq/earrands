@@ -28,6 +28,10 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Always fire the first fetch even when navigator.onLine is false —
+      // otherwise queries sit paused on offline cold-start and the service
+      // worker never gets a chance to answer from its cache.
+      networkMode: 'offlineFirst',
     },
   },
 })

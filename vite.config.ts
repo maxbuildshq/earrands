@@ -39,7 +39,7 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'timetable-api',
-              expiration: { maxEntries: 20, maxAgeSeconds: 86400 },
+              expiration: { maxEntries: 40, maxAgeSeconds: 7 * 86400 },
             },
           },
           {
