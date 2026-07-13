@@ -8,12 +8,14 @@ const STATUS_VARIANT = {
   pending: 'outline',
   enriched: 'accent-outline',
   reviewed: 'accent',
+  flagged: 'conflict',
 } as const
 
 const STATUS_LABEL = {
   pending: 'Pending',
   enriched: 'Enriched',
   reviewed: 'Reviewed',
+  flagged: 'Flagged',
 } as const
 
 export function EnrichmentStatusBadge({ status }: Props) {

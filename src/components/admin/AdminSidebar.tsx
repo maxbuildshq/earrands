@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: '/admin', label: 'Dash', end: true },
   { to: '/admin/festivals', label: 'Fests' },
   { to: '/admin/artists', label: 'Artists' },
+  { to: '/admin/review', label: 'Review' },
   { to: '/admin/sets', label: 'Sets' },
   { to: '/admin/requests', label: 'Reqs' },
   { to: '/admin/notifications', label: 'Notify' },

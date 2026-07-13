@@ -15,7 +15,7 @@ import {
   discogsUrl,
 } from '../../components/admin/InlineEdit'
 
-const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed'] as const
+const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed', 'flagged'] as const
 const PAGE_SIZES = [50, 100, 200, 300] as const
 
 function ImageHover({ src }: { src: string | null }) {
