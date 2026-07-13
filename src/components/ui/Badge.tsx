@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from 'react'
 
-type Variant = 'live' | 'accent' | 'accent-outline' | 'outline' | 'conflict'
+type Variant = 'live' | 'accent' | 'accent-outline' | 'outline' | 'conflict' | 'negative'
 
 type Props = HTMLAttributes<HTMLSpanElement> & {
   variant: Variant
@@ -14,6 +14,7 @@ const VARIANTS: Record<Variant, string> = {
   'accent-outline': 'border border-accent text-accent',
   outline: 'border border-border text-text-secondary',
   conflict: 'text-conflict tracking-wider',
+  negative: 'bg-negative text-white',
 }
 
 export function Badge({ variant, className = '', ...props }: Props) {

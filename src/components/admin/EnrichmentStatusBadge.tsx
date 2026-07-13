@@ -8,7 +8,7 @@ const STATUS_VARIANT = {
   pending: 'outline',
   enriched: 'accent-outline',
   reviewed: 'accent',
-  flagged: 'conflict',
+  flagged: 'negative',
 } as const
 
 const STATUS_LABEL = {

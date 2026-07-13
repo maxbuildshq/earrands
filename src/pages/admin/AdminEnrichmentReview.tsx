@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Heading } from '../../components/ui/Heading'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBadge'
-import { useAdminArtists, useUpdateArtist, useUpdateAndRefetch, useApproveArtists } from '../../hooks/useAdminArtists'
+import { useAdminArtists, useUpdateArtist, useUpdateAndRefetch, useApproveArtists, useActivateBio } from '../../hooks/useAdminArtists'
+import { useAdminFestivals } from '../../hooks/useAdminFestivals'
+import { useCreateJob } from '../../hooks/useAdminJobs'
 import {
   InlineEdit, InlineLocationEdit,
   scHandle, igHandle, bcHandle,
@@ -25,6 +27,12 @@ type FilterKey = (typeof FILTERS)[number]['key']
 const LEVEL_ORDER = { high: 0, medium: 1, low: 2 } as const
 type Level = keyof typeof LEVEL_ORDER
 
+const CONFIDENCE_FILTERS = ['all', 'high', 'medium', 'low', 'unscored'] as const
+type ConfidenceFilter = (typeof CONFIDENCE_FILTERS)[number]
+
+// Fields that can be re-enriched (map to enrich --fields=)
+const ENRICH_FIELDS = ['image', 'soundcloud', 'instagram', 'bandcamp', 'location', 'followers', 'bio'] as const
+
 // Queue grouping = aggregated confidence: the weakest identity-critical field
 // (SC, image, IG) sets the group; per-field chips carry the detail (ADR 011)
 function aggregateLevel(a: Artist): Level | 'unscored' {
@@ -44,20 +52,29 @@ const GROUPS: Array<{ key: Level | 'unscored'; label: string; hint: string }> = 
   { key: 'unscored', label: 'Unscored', hint: 'enriched before per-field confidence existed' },
 ]
 
+// Same ordering the pipeline uses to pre-select the winner: confidence tier →
+// SC avatar within tier → DETR score (rankImageCandidate in scripts/lib)
+function candidateRank(c: ImageCandidate): number {
+  const tier = c.confidence ? { high: 2, medium: 1, low: 0 }[c.confidence] : 0
+  return tier * 1000 + (c.source.startsWith('soundcloud') ? 500 : 0) + Math.min(c.score, 499)
+}
+
 const CHIP_STYLE: Record<Level, string> = {
   high: 'border border-accent text-accent',
   medium: 'border border-border text-text-secondary',
-  low: 'border border-conflict text-conflict',
+  low: 'bg-negative text-white',
 }
 
 function ConfidenceChip({ fc }: { fc: FieldConfidence | undefined }) {
-  if (!fc) return null
+  if (!fc) {
+    return <span className="inline-flex px-1 text-[10px] font-mono uppercase leading-tight border border-border text-border" title="No confidence data — enriched before per-field confidence existed">—</span>
+  }
   return (
     <span
       className={`inline-flex px-1 text-[10px] font-mono font-bold uppercase leading-tight cursor-help ${CHIP_STYLE[fc.level]}`}
       title={fc.evidence.join('\n')}
     >
-      {fc.level === 'high' ? 'H' : fc.level === 'medium' ? 'M' : 'L'}
+      {fc.level}
     </span>
   )
 }
@@ -79,18 +96,74 @@ function confirmField(a: Artist, key: string): Record<string, FieldConfidence> {
 function sourceLabel(source: string) {
   if (source.startsWith('soundcloud')) return 'SC'
   if (source.startsWith('discogs')) return 'Discogs'
-  if (source.startsWith('festival:')) return source
   return source
 }
 
+// Render evidence text with URLs as short clickable handles — the conflicting
+// profile is previewable and openable without leaving the card
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/\S+)/)
+  return (
+    <>
+      {parts.map((p, i) =>
+        /^https?:\/\//.test(p) ? (
+          <a key={i} href={p} target="_blank" rel="noreferrer" className="underline text-white hover:text-accent break-all">
+            {p.replace(/^https?:\/\/(www\.)?/, '')}
+          </a>
+        ) : (
+          <span key={i}>{p}</span>
+        )
+      )}
+    </>
+  )
+}
+
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="inline-flex items-center justify-center min-w-5 px-1 py-0.5 font-mono text-[11px] font-bold text-text-primary bg-surface-raised border border-border rounded shadow-[0_1px_0_var(--color-border)]">
+      {children}
+    </kbd>
+  )
+}
+
+// Full-size preview on hover, no delay — every second matters in review
+function HoverPreview({ src, children }: { src: string; children: ReactNode }) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  function handleEnter() {
+    const rect = ref.current?.getBoundingClientRect()
+    if (rect) {
+      const top = Math.min(Math.max(8, rect.top - 160), window.innerHeight - 328)
+      setPos({ top, left: Math.min(rect.right + 8, window.innerWidth - 328) })
+    }
+  }
+
+  return (
+    <div ref={ref} onMouseEnter={handleEnter} onMouseLeave={() => setPos(null)}>
+      {children}
+      {pos && (
+        <div className="fixed z-[100] pointer-events-none" style={{ top: pos.top, left: pos.left }}>
+          <img src={src} alt="" className="w-80 h-80 object-cover border border-border shadow-lg" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Carousel({ artist, onPick }: { artist: Artist; onPick: (url: string) => void }) {
-  const candidates = artist.image_candidates ?? []
+  const candidates = useMemo(
+    () => [...(artist.image_candidates ?? [])].sort((a, b) => candidateRank(b) - candidateRank(a)),
+    [artist.image_candidates],
+  )
   const selected = artist.image_url
 
   return (
     <div className="w-44 shrink-0 space-y-1.5">
       {selected ? (
-        <img src={selected} alt="" className="w-44 h-44 object-cover border border-border" />
+        <HoverPreview src={selected}>
+          <img src={selected} alt="" className="w-44 h-44 object-cover border border-border" />
+        </HoverPreview>
       ) : (
         <div className="w-44 h-44 bg-surface-raised border border-border flex items-center justify-center font-mono text-xs text-text-secondary">
           No image
@@ -113,31 +186,114 @@ function CandidateThumb({ candidate, selected, onPick }: {
   onPick: (url: string) => void
 }) {
   return (
-    <button
-      onClick={() => !selected && onPick(candidate.url)}
-      className={`relative block cursor-pointer ${selected ? 'outline-2 outline-accent' : 'opacity-80 hover:opacity-100'}`}
-      title={`${candidate.source}${candidate.confidence ? ` · ${candidate.confidence}` : ''} · score ${Math.round(candidate.score)}`}
-    >
-      <img src={candidate.url} alt="" className="w-12 h-12 object-cover border border-border" />
-      <span className={`absolute bottom-0 inset-x-0 text-[8px] font-mono uppercase leading-tight text-center truncate px-0.5 ${
-        candidate.confidence === 'low' ? 'bg-surface/90 text-conflict' : 'bg-surface/90 text-text-secondary'
-      }`}>
-        {sourceLabel(candidate.source)}
-      </span>
-    </button>
+    <HoverPreview src={candidate.url}>
+      <button
+        onClick={() => !selected && onPick(candidate.url)}
+        className={`relative block cursor-pointer ${selected ? 'outline-2 outline-accent' : 'opacity-80 hover:opacity-100'}`}
+        title={`${candidate.source}${candidate.confidence ? ` · ${candidate.confidence}` : ''} · score ${Math.round(candidate.score)}`}
+      >
+        <img src={candidate.url} alt="" className="w-12 h-12 object-cover border border-border" />
+        <span className={`absolute bottom-0 inset-x-0 text-[8px] font-mono uppercase leading-tight text-center truncate px-0.5 ${
+          candidate.confidence === 'low' ? 'bg-negative text-white' : 'bg-surface/90 text-text-secondary'
+        }`}>
+          {sourceLabel(candidate.source)}
+        </span>
+      </button>
+    </HoverPreview>
   )
 }
 
-function ReviewCard({ artist, focused, onApprove, onFlag, cardRef }: {
+function FieldRow({ label, chip, checked, onCheck, conflictLines, children }: {
+  label: string
+  chip: FieldConfidence | undefined | null
+  checked?: boolean
+  onCheck?: (v: boolean) => void
+  conflictLines?: string[]
+  children: ReactNode
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2 min-w-0">
+        {onCheck ? (
+          <input type="checkbox" checked={checked} onChange={e => onCheck(e.target.checked)} className="accent-accent shrink-0" title={`Include ${label} in re-enrichment`} />
+        ) : (
+          <span className="w-[13px] shrink-0" />
+        )}
+        <span className="w-20 shrink-0 text-xs uppercase tracking-wider text-text-secondary">{label}</span>
+        {chip !== null && <ConfidenceChip fc={chip ?? undefined} />}
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
+      {conflictLines && conflictLines.length > 0 && (
+        <div className="ml-[21px] mt-0.5 space-y-0.5">
+          {conflictLines.map((line, i) => (
+            <p key={i} className="text-[11px] leading-snug bg-negative text-white px-1.5 py-0.5 inline-block">
+              <Linkified text={line} />
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boolean; onCheck: (v: boolean) => void }) {
+  const activateBio = useActivateBio()
+  const options = [
+    { key: 'festival', label: 'Festival', content: artist.bio_festival, warning: artist.bio_research?.festival_bio_flagged ? 'contains festival name' : undefined },
+    { key: 'generated', label: 'Generated', content: artist.bio_generated },
+  ].filter(o => o.content && o.content !== artist.bio)
+
+  return (
+    <div className="flex-1 min-w-0 space-y-1">
+      <div className="flex items-center gap-2 flex-wrap">
+        <input type="checkbox" checked={checked} onChange={e => onCheck(e.target.checked)} className="accent-accent shrink-0" title="Include bio in re-enrichment" />
+        <span className="text-xs uppercase tracking-wider text-text-secondary">Bio</span>
+        {artist.bio_source && <span className="text-[10px] font-mono text-accent uppercase">{artist.bio_source}</span>}
+        {options.map(o => (
+          <button
+            key={o.key}
+            className="font-mono text-[10px] text-accent hover:underline uppercase tracking-wider"
+            title={`${o.content!.slice(0, 300)}${o.warning ? `\n⚠ ${o.warning}` : ''}`}
+            onClick={() => activateBio.mutate({ artistId: artist.id, source: o.key })}
+          >
+            Use {o.label}{o.warning ? ' ⚠' : ''}
+          </button>
+        ))}
+      </div>
+      {artist.bio ? (
+        <p className="font-mono text-xs text-text-primary leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line pr-1">
+          {artist.bio}
+        </p>
+      ) : (
+        <p className="font-mono text-xs text-border">No active bio</p>
+      )}
+    </div>
+  )
+}
+
+function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, onEnrich, cardRef }: {
   artist: Artist
   focused: boolean
+  selected: boolean
+  onSelect: (v: boolean) => void
   onApprove: () => void
   onFlag: () => void
+  onEnrich: (fields: string[]) => void
   cardRef: (el: HTMLDivElement | null) => void
 }) {
   const updateArtist = useUpdateArtist()
   const updateAndRefetch = useUpdateAndRefetch()
+  const [enrichFields, setEnrichFields] = useState<Set<string>>(new Set())
   const fc = artist.enrichment_confidence ?? {}
+
+  function toggleField(field: string, v: boolean) {
+    setEnrichFields(prev => {
+      const next = new Set(prev)
+      if (v) next.add(field)
+      else next.delete(field)
+      return next
+    })
+  }
 
   function saveField(field: string, confKey: string, value: string | number | null) {
     const updates = { [field]: value, enrichment_confidence: confirmField(artist, confKey) }
@@ -156,100 +312,106 @@ function ReviewCard({ artist, focused, onApprove, onFlag, cardRef }: {
     } as Partial<Artist> & { id: string })
   }
 
-  const conflicts = Object.entries(fc)
-    .filter(([, v]) => v.level === 'low' && v.evidence.some(e => e.includes('DIFFER') || e.includes('conflict')))
+  // Conflict evidence surfaces directly under the field it belongs to
+  function conflictLines(key: string): string[] {
+    return (fc[key]?.evidence ?? []).filter(e => e.includes('DIFFER') || e.includes('conflict'))
+  }
 
   return (
     <div
       ref={cardRef}
       className={`border p-4 flex gap-4 transition-colors ${focused ? 'border-accent bg-surface-raised' : 'border-border'}`}
     >
-      <Carousel artist={artist} onPick={pickImage} />
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={e => onSelect(e.target.checked)}
+        className="accent-accent self-start mt-1"
+        title="Select for bulk enrichment"
+      />
 
-      <div className="flex-1 min-w-0 space-y-2.5 font-mono text-sm">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="shrink-0 space-y-1">
+        <div className="flex items-center gap-1.5">
+          <input type="checkbox" checked={enrichFields.has('image')} onChange={e => toggleField('image', e.target.checked)} className="accent-accent" title="Include image in re-enrichment" />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary">Image</span>
+          <ConfidenceChip fc={fc.image} />
+        </div>
+        <Carousel artist={artist} onPick={pickImage} />
+      </div>
+
+      <div className="w-72 shrink-0 space-y-1.5 font-mono text-sm">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link to={`/admin/artists/${artist.id}`} className="font-bold text-base text-text-primary hover:text-accent transition-colors">
             {artist.name}
           </Link>
-          <ConfidenceChip fc={fc.image} />
           <EnrichmentStatusBadge status={artist.enrichment_status} />
-          {artist.soundcloud_followers != null && (
-            <span className="text-xs text-text-secondary">{artist.soundcloud_followers.toLocaleString()} SC followers</span>
-          )}
         </div>
-
-        {conflicts.length > 0 && (
-          <div className="space-y-0.5">
-            {conflicts.map(([key, v]) => (
-              <p key={key} className="text-xs text-conflict">
-                {key}: {v.evidence.filter(e => e.includes('DIFFER') || e.includes('conflict')).join(' · ')}
-              </p>
-            ))}
-          </div>
+        {artist.soundcloud_followers != null && (
+          <p className="text-[11px] text-text-secondary">{artist.soundcloud_followers.toLocaleString()} SC followers</p>
         )}
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 max-w-2xl">
-          <FieldRow label="SoundCloud" chip={fc.soundcloud}>
-            <InlineEdit
-              value={artist.soundcloud_url ?? ''}
-              displayValue={scHandle(artist.soundcloud_url)}
-              href={artist.soundcloud_url}
-              onSave={v => saveField('soundcloud_url', 'soundcloud', v || null)}
-              placeholder="soundcloud.com/..."
-              parse={scParse}
-              build={scBuild}
-            />
-          </FieldRow>
-          <FieldRow label="Instagram" chip={fc.instagram}>
-            <InlineEdit
-              value={artist.instagram_url ?? ''}
-              displayValue={igHandle(artist.instagram_url)}
-              href={artist.instagram_url}
-              onSave={v => saveField('instagram_url', 'instagram', v || null)}
-              placeholder="instagram.com/..."
-              parse={igParse}
-              build={igBuild}
-            />
-          </FieldRow>
-          <FieldRow label="Bandcamp" chip={fc.bandcamp}>
-            <InlineEdit
-              value={artist.bandcamp_url ?? ''}
-              displayValue={bcHandle(artist.bandcamp_url)}
-              href={artist.bandcamp_url}
-              onSave={v => saveField('bandcamp_url', 'bandcamp', v || null)}
-              placeholder="x.bandcamp.com"
-              parse={bcParse}
-              build={bcBuild}
-            />
-          </FieldRow>
-          <FieldRow label="Discogs" chip={fc.discogs}>
-            <InlineEdit
-              value={artist.discogs_id ? String(artist.discogs_id) : ''}
-              displayValue={artist.discogs_id ? String(artist.discogs_id) : null}
-              href={artist.discogs_id ? discogsUrl(artist.discogs_id) : null}
-              onSave={v => {
-                const digits = v.replace(/\D/g, '')
-                saveField('discogs_id', 'discogs', digits ? Number(digits) : null)
-              }}
-              placeholder="id"
-            />
-          </FieldRow>
-          <FieldRow label="Location" chip={fc.location}>
-            <InlineLocationEdit
-              city={artist.city}
-              countryCode={artist.country_code}
-              onSave={(city, countryCode) => {
-                updateArtist.mutate({
-                  id: artist.id,
-                  city: city || null,
-                  country_code: countryCode || null,
-                  enrichment_confidence: confirmField(artist, 'location'),
-                } as Partial<Artist> & { id: string })
-              }}
-            />
-          </FieldRow>
-        </div>
+        <FieldRow label="SC" chip={fc.soundcloud} checked={enrichFields.has('soundcloud')} onCheck={v => toggleField('soundcloud', v)} conflictLines={conflictLines('soundcloud')}>
+          <InlineEdit
+            value={artist.soundcloud_url ?? ''}
+            displayValue={scHandle(artist.soundcloud_url)}
+            href={artist.soundcloud_url}
+            onSave={v => saveField('soundcloud_url', 'soundcloud', v || null)}
+            placeholder="soundcloud.com/..."
+            parse={scParse}
+            build={scBuild}
+          />
+        </FieldRow>
+        <FieldRow label="IG" chip={fc.instagram} checked={enrichFields.has('instagram')} onCheck={v => toggleField('instagram', v)} conflictLines={conflictLines('instagram')}>
+          <InlineEdit
+            value={artist.instagram_url ?? ''}
+            displayValue={igHandle(artist.instagram_url)}
+            href={artist.instagram_url}
+            onSave={v => saveField('instagram_url', 'instagram', v || null)}
+            placeholder="instagram.com/..."
+            parse={igParse}
+            build={igBuild}
+          />
+        </FieldRow>
+        <FieldRow label="BC" chip={fc.bandcamp} checked={enrichFields.has('bandcamp')} onCheck={v => toggleField('bandcamp', v)} conflictLines={conflictLines('bandcamp')}>
+          <InlineEdit
+            value={artist.bandcamp_url ?? ''}
+            displayValue={bcHandle(artist.bandcamp_url)}
+            href={artist.bandcamp_url}
+            onSave={v => saveField('bandcamp_url', 'bandcamp', v || null)}
+            placeholder="x.bandcamp.com"
+            parse={bcParse}
+            build={bcBuild}
+          />
+        </FieldRow>
+        <FieldRow label="Discogs" chip={fc.discogs} conflictLines={conflictLines('discogs')}>
+          <InlineEdit
+            value={artist.discogs_id ? String(artist.discogs_id) : ''}
+            displayValue={artist.discogs_id ? String(artist.discogs_id) : null}
+            href={artist.discogs_id ? discogsUrl(artist.discogs_id) : null}
+            onSave={v => {
+              const digits = v.replace(/\D/g, '')
+              saveField('discogs_id', 'discogs', digits ? Number(digits) : null)
+            }}
+            placeholder="id"
+          />
+        </FieldRow>
+        <FieldRow label="Loc" chip={fc.location} checked={enrichFields.has('location')} onCheck={v => toggleField('location', v)}>
+          <InlineLocationEdit
+            city={artist.city}
+            countryCode={artist.country_code}
+            onSave={(city, countryCode) => {
+              updateArtist.mutate({
+                id: artist.id,
+                city: city || null,
+                country_code: countryCode || null,
+                enrichment_confidence: confirmField(artist, 'location'),
+              } as Partial<Artist> & { id: string })
+            }}
+          />
+        </FieldRow>
       </div>
+
+      <BioBlock artist={artist} checked={enrichFields.has('bio')} onCheck={v => toggleField('bio', v)} />
 
       <div className="shrink-0 flex flex-col gap-1.5 w-24">
         {artist.enrichment_status !== 'reviewed' && (
@@ -258,37 +420,43 @@ function ReviewCard({ artist, focused, onApprove, onFlag, cardRef }: {
           </Button>
         )}
         {artist.enrichment_status !== 'flagged' && (
-          <Button variant="secondary" fullWidth={false} className="!text-xs !px-2 !py-1.5 !text-conflict" onClick={onFlag}>
+          <Button variant="secondary" fullWidth={false} className="!text-xs !px-2 !py-1.5 !text-negative" onClick={onFlag}>
             Flag
           </Button>
         )}
+        <Button
+          variant="secondary"
+          fullWidth={false}
+          className="!text-xs !px-2 !py-1.5"
+          onClick={() => onEnrich([...enrichFields])}
+          title={enrichFields.size > 0 ? `Re-enrich: ${[...enrichFields].join(', ')}` : 'Full enrichment'}
+        >
+          Enrich{enrichFields.size > 0 ? ` (${enrichFields.size})` : ''}
+        </Button>
       </div>
-    </div>
-  )
-}
-
-function FieldRow({ label, chip, children }: { label: string; chip: FieldConfidence | undefined; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-2 min-w-0">
-      <span className="w-24 shrink-0 text-xs uppercase tracking-wider text-text-secondary">{label}</span>
-      <ConfidenceChip fc={chip} />
-      <div className="min-w-0 flex-1">{children}</div>
     </div>
   )
 }
 
 export default function AdminEnrichmentReview() {
   const [filter, setFilter] = useState<FilterKey>('pending')
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all')
+  const [festivalId, setFestivalId] = useState('')
   const [focusIndex, setFocusIndex] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkFields, setBulkFields] = useState<Set<string>>(new Set())
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
+  const { data: festivals = [] } = useAdminFestivals()
   const { data: result, isLoading } = useAdminArtists({
     status: filter === 'candidates' ? undefined : filter,
     hasCandidates: filter === 'candidates' || undefined,
+    festivalId: festivalId || undefined,
     limit: 200,
   })
   const updateArtist = useUpdateArtist()
   const approveArtists = useApproveArtists()
+  const createJob = useCreateJob()
 
   const artists = (result?.data ?? []) as Artist[]
 
@@ -296,11 +464,12 @@ export default function AdminEnrichmentReview() {
     const byGroup = new Map<string, Artist[]>()
     for (const a of artists) {
       const g = aggregateLevel(a)
+      if (confidenceFilter !== 'all' && g !== confidenceFilter) continue
       byGroup.set(g, [...(byGroup.get(g) ?? []), a])
     }
     // alphabetical within groups — server already orders by sort_name
     return GROUPS.map(g => ({ ...g, artists: byGroup.get(g.key) ?? [] })).filter(g => g.artists.length > 0)
-  }, [artists])
+  }, [artists, confidenceFilter])
 
   const flatList = useMemo(() => grouped.flatMap(g => g.artists), [grouped])
 
@@ -312,17 +481,50 @@ export default function AdminEnrichmentReview() {
     updateArtist.mutate({ id: artist.id, enrichment_status: 'flagged' } as Partial<Artist> & { id: string })
   }, [updateArtist])
 
-  // Keyboard: J/K navigate, A approve + advance, X flag + advance
+  function enrichOne(artist: Artist, fields: string[]) {
+    createJob.mutate({
+      type: 'enrich',
+      artist_sort_names: [artist.sort_name],
+      ...(fields.length > 0 && { fields }),
+    })
+  }
+
+  function enrichSelected() {
+    const names = artists.filter(a => selected.has(a.id)).map(a => a.sort_name)
+    if (names.length === 0) return
+    createJob.mutate({
+      type: 'enrich',
+      artist_sort_names: names,
+      ...(bulkFields.size > 0 && { fields: [...bulkFields] }),
+    })
+    setSelected(new Set())
+  }
+
+  function toggleBulkField(field: string, v: boolean) {
+    setBulkFields(prev => {
+      const next = new Set(prev)
+      if (v) next.add(field)
+      else next.delete(field)
+      return next
+    })
+  }
+
+  const allSelected = flatList.length > 0 && flatList.every(a => selected.has(a.id))
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(flatList.map(a => a.id)))
+  }
+
+  // Keyboard: K next, J previous (per Boss), A approve + advance, X flag + advance
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
       if (flatList.length === 0) return
       const key = e.key.toLowerCase()
-      if (key === 'j') {
+      if (key === 'k') {
         e.preventDefault()
         setFocusIndex(i => Math.min(i + 1, flatList.length - 1))
-      } else if (key === 'k') {
+      } else if (key === 'j') {
         e.preventDefault()
         setFocusIndex(i => Math.max(i - 1, 0))
       } else if (key === 'a') {
@@ -352,33 +554,74 @@ export default function AdminEnrichmentReview() {
     }
   }, [focusIndex, flatList])
 
-  useEffect(() => { setFocusIndex(0) }, [filter])
+  useEffect(() => { setFocusIndex(0) }, [filter, confidenceFilter, festivalId])
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <Heading variant="page">Enrichment Review</Heading>
-        <span className="font-mono text-xs text-text-secondary uppercase tracking-wider">
-          J/K navigate · A approve · X flag
+        <span className="font-mono text-xs text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+          <Kbd>K</Kbd> next <Kbd>J</Kbd> prev <Kbd>A</Kbd> approve <Kbd>X</Kbd> flag
         </span>
       </div>
 
+      {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex gap-0.5">
           {FILTERS.map(f => (
-            <Button
-              key={f.key}
-              variant="segment"
-              active={filter === f.key}
-              fullWidth={false}
-              className="px-3 py-1.5"
-              onClick={() => setFilter(f.key)}
-            >
+            <Button key={f.key} variant="segment" active={filter === f.key} fullWidth={false} className="px-3 py-1.5" onClick={() => setFilter(f.key)}>
               {f.label}
             </Button>
           ))}
         </div>
-        <span className="font-mono text-sm text-text-secondary">{result?.count ?? 0} artists</span>
+        <div className="flex gap-0.5">
+          {CONFIDENCE_FILTERS.map(c => (
+            <Button key={c} variant="segment" active={confidenceFilter === c} fullWidth={false} className="px-3 py-1.5" onClick={() => setConfidenceFilter(c)}>
+              {c}
+            </Button>
+          ))}
+        </div>
+        <select
+          value={festivalId}
+          onChange={e => setFestivalId(e.target.value)}
+          className="bg-surface border border-border text-text-primary font-mono text-sm px-3 py-2 uppercase tracking-wider"
+        >
+          <option value="">All festivals</option>
+          {festivals.map(f => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        <span className="font-mono text-sm text-text-secondary">{flatList.length} of {result?.count ?? 0} artists</span>
+      </div>
+
+      {/* Bulk enrichment bar */}
+      <div className="flex items-center gap-3 flex-wrap font-mono text-sm border border-border px-3 py-2.5">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} className="accent-accent" />
+          <span className="text-text-secondary text-xs">{selected.size} selected</span>
+        </label>
+        <span className="text-border">|</span>
+        {ENRICH_FIELDS.map(f => (
+          <label key={f} className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-secondary cursor-pointer">
+            <input type="checkbox" checked={bulkFields.has(f)} onChange={e => toggleBulkField(f, e.target.checked)} className="accent-accent" />
+            {f}
+          </label>
+        ))}
+        <Button
+          variant="secondary"
+          fullWidth={false}
+          className="!text-xs !px-3 !py-1"
+          disabled={selected.size === 0 || createJob.isPending}
+          onClick={enrichSelected}
+          title={bulkFields.size > 0 ? `Fields: ${[...bulkFields].join(', ')}` : 'Full enrichment (no fields selected)'}
+        >
+          Enrich {selected.size > 0 ? selected.size : ''} {bulkFields.size > 0 ? `(${bulkFields.size} fields)` : '(full)'}
+        </Button>
+        {selected.size > 0 && (
+          <button className="text-text-secondary hover:text-accent text-xs uppercase tracking-wider" onClick={() => setSelected(new Set())}>
+            Clear
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -389,7 +632,7 @@ export default function AdminEnrichmentReview() {
         grouped.map(group => (
           <section key={group.key} className="space-y-2">
             <div className="flex items-center gap-3 pt-2">
-              <Badge variant={group.key === 'high' ? 'accent' : group.key === 'low' ? 'conflict' : 'outline'}>
+              <Badge variant={group.key === 'high' ? 'accent' : group.key === 'low' ? 'negative' : 'outline'}>
                 {group.label}
               </Badge>
               <span className="font-mono text-xs text-text-secondary">
@@ -413,8 +656,16 @@ export default function AdminEnrichmentReview() {
                   key={a.id}
                   artist={a}
                   focused={flatList[focusIndex]?.id === a.id}
+                  selected={selected.has(a.id)}
+                  onSelect={v => setSelected(prev => {
+                    const next = new Set(prev)
+                    if (v) next.add(a.id)
+                    else next.delete(a.id)
+                    return next
+                  })}
                   onApprove={() => approve(a)}
                   onFlag={() => flag(a)}
+                  onEnrich={fields => enrichOne(a, fields)}
                   cardRef={el => {
                     if (el) cardRefs.current.set(a.id, el)
                     else cardRefs.current.delete(a.id)

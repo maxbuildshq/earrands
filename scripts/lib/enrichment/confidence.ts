@@ -18,6 +18,9 @@ export type ResolutionEvidence = {
   discogs_links_ig: boolean
   discogs_links_bc: boolean
   discogs_conflicts_sc: boolean
+  // Conflicting URLs ride along so evidence strings are actionable in the admin UI
+  discogs_sc_url?: string | null
+  brave_sc_url?: string | null
   brave_sc_agrees?: boolean
   brave_sc_conflict?: boolean
   city: string | null
@@ -61,7 +64,7 @@ export function computeFieldConfidence(e: ResolutionEvidence): Record<string, Fi
     // Brave agreement is evidence-only (search results aren't cross-links); a
     // conflict on an uncorroborated value drags it to low for review priority.
     if (e.brave_sc_agrees) evidence.push('brave search agrees')
-    if (e.brave_sc_conflict) evidence.push('brave search top result DIFFERS')
+    if (e.brave_sc_conflict) evidence.push(`brave search top result DIFFERS${e.brave_sc_url ? `: ${e.brave_sc_url}` : ''}`)
     const level: Confidence = corroborated ? 'high' : e.brave_sc_conflict ? 'low' : 'medium'
     fc.soundcloud = { level, evidence }
   } else {
@@ -77,7 +80,7 @@ export function computeFieldConfidence(e: ResolutionEvidence): Record<string, Fi
     if (e.discogs_links_ig) evidence.push('discogs page links our Instagram')
     if (e.discogs_links_bc) evidence.push('discogs page links our Bandcamp')
     if (e.discogs_conflicts_sc) {
-      fc.discogs = { level: 'low', evidence: ['discogs page links a DIFFERENT SoundCloud than ours', ...evidence] }
+      fc.discogs = { level: 'low', evidence: [`discogs page links a DIFFERENT SoundCloud than ours${e.discogs_sc_url ? `: ${e.discogs_sc_url}` : ''}`, ...evidence] }
     } else if (evidence.length > 0) {
       fc.discogs = { level: 'high', evidence }
     } else {

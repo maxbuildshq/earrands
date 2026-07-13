@@ -90,8 +90,10 @@ export async function enrichArtist(
   let discogsLinksIg = false
   let discogsLinksBc = false
   let discogsConflictsSc = false
+  let discogsScUrl: string | null = null
   let braveScAgrees = false
   let braveScConflict = false
+  let braveScUrl: string | null = null
   let bcSource: string | null = artist.bandcamp_url ? 'db' : null
   let locationSource: string | null = artist.city ? 'db' : null
 
@@ -113,6 +115,7 @@ export async function enrichArtist(
             braveScAgrees = true
           } else {
             braveScConflict = true
+            braveScUrl = scUrl
             result.review_notes.push(`SoundCloud conflict: Brave top result ${scUrl} vs existing ${result.soundcloud_url}`)
           }
         }
@@ -174,6 +177,7 @@ export async function enrichArtist(
             )
             const discogsHasCrossRef = !!(discogs.instagram_url || discogs.soundcloud_url)
             discogsConflictsSc = discogsConflictsWithKnownSc
+            if (discogsConflictsWithKnownSc) discogsScUrl = discogs.soundcloud_url
             discogsLinksSc = !!(result.soundcloud_url && discogs.soundcloud_url === result.soundcloud_url)
             discogsLinksBc = !!(result.bandcamp_url && discogs.bandcamp_url && normalizeBandcampUrl(discogs.bandcamp_url) === result.bandcamp_url)
             if (graph || (discogsHasCrossRef && !discogsConflictsWithKnownSc)) {
@@ -400,8 +404,10 @@ export async function enrichArtist(
       discogs_links_ig: discogsLinksIg,
       discogs_links_bc: discogsLinksBc,
       discogs_conflicts_sc: discogsConflictsSc,
+      discogs_sc_url: discogsScUrl,
       brave_sc_agrees: braveScAgrees,
       brave_sc_conflict: braveScConflict,
+      brave_sc_url: braveScUrl,
       city: result.city,
       location_source: locationSource,
       soundcloud_followers: result.soundcloud_followers,
@@ -416,7 +422,10 @@ export async function enrichArtist(
       for (const c of result.image_candidates) {
         c.confidence = imageSourceConfidence(c.source, result.field_confidence)
       }
-      const best = result.image_candidates.reduce((a, b) => rankImageCandidate(b) > rankImageCandidate(a) ? b : a)
+      // Persist candidates in selection-rank order so the carousel reads
+      // best-first without re-deriving the ranking client-side
+      result.image_candidates.sort((a, b) => rankImageCandidate(b) - rankImageCandidate(a))
+      const best = result.image_candidates[0]
       if (!candidatesOnly && best.url !== result.image_url) {
         result.image_url = best.url
         result.sources.push(best.source)
