@@ -7,6 +7,7 @@ import { writeReviewFile, readReviewFile, loadProgress, saveProgress, clearProgr
 import { isComboEntry } from './lib/enrichment/name-utils.js'
 import type { EnrichmentField, EnrichmentResult, ArtistRow, BioResearch, BioSource } from './lib/enrichment/types.js'
 import { generateArtistBio } from './lib/enrichment/bio-generator.js'
+import { flushUsage, fetchMonthUsage, estimateRunBudget, BUDGETS } from './lib/enrichment/rate-limit.js'
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -383,6 +384,14 @@ async function main() {
     return
   }
 
+  // Preflight budget check — Brave is the binding monthly constraint
+  const braveUsed = await fetchMonthUsage(supabase, 'brave')
+  const budget = estimateRunBudget(artists.length, fields, braveUsed)
+  console.log(chalk.dim(`  Brave budget: ${braveUsed}/${BUDGETS.brave.monthly} used this month · this run ≈ ${budget.braveCalls} calls`))
+  if (!budget.fits) {
+    console.log(chalk.yellow(`  ⚠ Estimated calls (${budget.braveCalls}) exceed remaining Brave budget (${budget.braveRemaining}). Consider --limit or wait for the monthly reset.`))
+  }
+
   const config: PipelineConfig = {
     braveApiKey,
     discogsKey,
@@ -476,6 +485,9 @@ async function main() {
       })
     }
   }
+
+  // Persist real API consumption (dry runs included — the calls happened)
+  await flushUsage(supabase)
 
   // ── Summary ──────────────────────────────────────────────────────────────
   console.log('\n')

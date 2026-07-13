@@ -154,9 +154,11 @@ Opt-in entity-resolution mode; default stays `legacy` (behavior unchanged). Adds
 - **Persistence** (migration 036): `artists.image_candidates jsonb` (full tagged candidate set) + `artists.enrichment_confidence jsonb` (per-field `{ level, evidence[] }`). Applied on `--apply`; scoped runs merge only their own confidence keys (admin-confirmed values on other fields survive).
 - **Backfill** (`--fields=image-candidates`): collects/scores/persists candidates only; never touches `image_url`, `enrichment_status`, or `enriched_at`. Field-scoped corroboration rule: Brave searches run only when the selected fields need them (or from scratch); within a covered field they run even if a value exists, for conflict detection.
 
-### Rate limits
+### Rate limits & usage accounting
 
-Brave Search: **2,000 queries/month** free tier. Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. Bio research: 1 Brave query per artist (counts against monthly quota).
+Brave Search: **2,000 queries/month** free tier (override via `BRAVE_MONTHLY_QUOTA`). Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. MusicBrainz: 1 req/sec + User-Agent. Bio research: 1 Brave query per artist (counts against monthly quota).
+
+Every outbound client records real API consumption via `rate-limit.ts` (`recordUsage`, dry runs included — the calls happened); `enrich-artists.ts` flushes counts to the `api_usage` table (migration 037, service-role-only `increment_api_usage` RPC) and prints a **preflight Brave budget estimate** before each run. The admin dashboard's **API Budgets panel** reads `api_usage` via the `admin-usage` edge function: "≈N artists enrichable this month" (remaining Brave ÷ 3 calls/artist), monthly Brave bar (accent → white ≥70% → white-on-negative ≥90%), and per-vendor calls-today tiles. Keep the panel's constants in `src/components/admin/ApiBudgets.tsx` in sync with `BUDGETS` in `rate-limit.ts`.
 
 ### Enrichment workflow
 

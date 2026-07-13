@@ -1,5 +1,6 @@
 import { buildSearchQuery, isSoundCloudProfileUrl, isInstagramProfileUrl, normalizeSoundCloudUrl, normalizeUrl } from './name-utils.js'
 import { sleep } from '../../scrapers/base.js'
+import { recordUsage } from './rate-limit.js'
 import type { BioSource } from './types.js'
 
 const BRAVE_API_URL = 'https://api.search.brave.com/res/v1/web/search'
@@ -157,6 +158,7 @@ async function braveSearch(
     count: String(count),
   })
 
+  recordUsage('brave')
   const res = await fetch(`${BRAVE_API_URL}?${params}`, {
     headers: {
       'Accept': 'application/json',

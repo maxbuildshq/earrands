@@ -5,6 +5,7 @@ import { useAdminFestivals, useAdminFestivalStats } from '../../hooks/useAdminFe
 import { useAdminArtists } from '../../hooks/useAdminArtists'
 import { useAdminRequests } from '../../hooks/useAdminRequests'
 import { useAdminJobs } from '../../hooks/useAdminJobs'
+import { ApiBudgets } from '../../components/admin/ApiBudgets'
 
 function StatCard({ label, value, to }: { label: string; value: string | number; to?: string }) {
   const inner = (
@@ -34,6 +35,8 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8">
       <Heading variant="page">Dashboard</Heading>
+
+      <ApiBudgets />
 
       {/* Overview stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

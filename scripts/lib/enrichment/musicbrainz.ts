@@ -1,4 +1,5 @@
 import { sleep } from '../../scrapers/base.js'
+import { recordUsage } from './rate-limit.js'
 
 const MB_API = 'https://musicbrainz.org/ws/2'
 // MusicBrainz requires a meaningful User-Agent and max 1 req/s
@@ -31,6 +32,7 @@ function normalize(url: string): string {
 }
 
 async function mbFetch<T>(path: string): Promise<T | null> {
+  recordUsage('musicbrainz')
   const res = await fetch(`${MB_API}${path}`, {
     headers: { 'User-Agent': MB_USER_AGENT, Accept: 'application/json' },
   })
