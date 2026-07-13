@@ -68,6 +68,30 @@ describe('soundcloud confidence (root node)', () => {
     expect(fc.soundcloud.level).toBe('high')
   })
 
+  it('drops an uncorroborated value to low when Brave conflicts', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      soundcloud_url: 'https://soundcloud.com/x', sc_source: 'db', brave_sc_conflict: true,
+    }))
+    expect(fc.soundcloud.level).toBe('low')
+  })
+
+  it('keeps a cross-link-corroborated value high despite a Brave conflict', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      soundcloud_url: 'https://soundcloud.com/x', sc_source: 'db',
+      discogs_links_sc: true, brave_sc_conflict: true,
+    }))
+    expect(fc.soundcloud.level).toBe('high')
+    expect(fc.soundcloud.evidence).toContain('brave search top result DIFFERS')
+  })
+
+  it('records Brave agreement as evidence without a level bump', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      soundcloud_url: 'https://soundcloud.com/x', sc_source: 'db', brave_sc_agrees: true,
+    }))
+    expect(fc.soundcloud.level).toBe('medium')
+    expect(fc.soundcloud.evidence).toContain('brave search agrees')
+  })
+
   it('does not count Discogs as corroboration when SC came FROM Discogs', () => {
     const fc = computeFieldConfidence(baseEvidence({
       soundcloud_url: 'https://soundcloud.com/subfocus', sc_source: 'discogs',

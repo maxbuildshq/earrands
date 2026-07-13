@@ -18,6 +18,8 @@ export type ResolutionEvidence = {
   discogs_links_ig: boolean
   discogs_links_bc: boolean
   discogs_conflicts_sc: boolean
+  brave_sc_agrees?: boolean
+  brave_sc_conflict?: boolean
   city: string | null
   location_source: string | null
   soundcloud_followers: number | null
@@ -56,7 +58,12 @@ export function computeFieldConfidence(e: ResolutionEvidence): Record<string, Fi
       corroborated = true
       evidence.push('discogs page links same SoundCloud')
     }
-    fc.soundcloud = { level: corroborated ? 'high' : 'medium', evidence }
+    // Brave agreement is evidence-only (search results aren't cross-links); a
+    // conflict on an uncorroborated value drags it to low for review priority.
+    if (e.brave_sc_agrees) evidence.push('brave search agrees')
+    if (e.brave_sc_conflict) evidence.push('brave search top result DIFFERS')
+    const level: Confidence = corroborated ? 'high' : e.brave_sc_conflict ? 'low' : 'medium'
+    fc.soundcloud = { level, evidence }
   } else {
     fc.soundcloud = { level: 'low', evidence: ['not found'] }
   }

@@ -52,6 +52,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --poll-jobs --poll-interval=60     Custom poll interval (seconds, default: 30)
   npm run enrich -- --search-keywords="drum & bass"   Append keywords to Brave search queries
   npm run enrich -- --resolver=graph                   MusicBrainz corroboration + per-field confidence (default: legacy)
+  npm run enrich -- --fields=image-candidates          Backfill candidate sets only — image_url winner + enrichment_status untouched
 
 Fields: image, instagram, soundcloud, bandcamp, bio, location, followers
 
@@ -133,13 +134,29 @@ function deriveBioSources(research: BioResearch, soundcloudUrl: string | null, d
 
 function fieldColumns(field: EnrichmentField): string[] {
   switch (field) {
-    case 'image': return ['image_url']
+    case 'image': return ['image_url', 'image_candidates']
+    case 'image-candidates': return ['image_candidates']
     case 'instagram': return ['instagram_url']
     case 'soundcloud': return ['soundcloud_url', 'soundcloud_embed_url']
     case 'bandcamp': return ['bandcamp_url']
     case 'location': return ['city', 'country_code']
     case 'followers': return ['soundcloud_followers']
     case 'bio': return ['bio_research', 'bio_sources']
+  }
+}
+
+// Which enrichment_confidence keys a scoped run is allowed to overwrite —
+// unscoped fields keep whatever confidence (incl. admin-confirmed) they had.
+function confidenceKeys(field: EnrichmentField): string[] {
+  switch (field) {
+    case 'image': return ['image', 'discogs']
+    case 'image-candidates': return ['image', 'discogs']
+    case 'instagram': return ['instagram']
+    case 'soundcloud': return ['soundcloud']
+    case 'bandcamp': return ['bandcamp']
+    case 'location': return ['location']
+    case 'followers': return ['followers']
+    case 'bio': return []
   }
 }
 
@@ -158,6 +175,8 @@ function buildUpdateData(a: EnrichmentResult, scopedFields?: EnrichmentField[]):
     if (a.city) data.city = a.city
     if (a.country_code) data.country_code = a.country_code
     if (a.soundcloud_followers != null) data.soundcloud_followers = a.soundcloud_followers
+    if (a.image_candidates?.length) data.image_candidates = a.image_candidates
+    if (a.field_confidence) data.enrichment_confidence = a.field_confidence
     if (a.bio_research) {
       data.bio_research = a.bio_research
       data.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
@@ -177,6 +196,7 @@ function buildUpdateData(a: EnrichmentResult, scopedFields?: EnrichmentField[]):
   if (allowed.has('city') && a.city) data.city = a.city
   if (allowed.has('country_code') && a.country_code) data.country_code = a.country_code
   if (allowed.has('soundcloud_followers') && a.soundcloud_followers != null) data.soundcloud_followers = a.soundcloud_followers
+  if (allowed.has('image_candidates') && a.image_candidates?.length) data.image_candidates = a.image_candidates
   if (allowed.has('bio_research') && a.bio_research) {
     data.bio_research = a.bio_research
     data.bio_sources = deriveBioSources(a.bio_research, a.soundcloud_url, a.discogs_id)
@@ -225,6 +245,23 @@ async function applyReviewFile(path: string, fieldsOverride?: EnrichmentField[])
   let updated = 0
   for (const a of toApply) {
     const updateData = buildUpdateData(a, scopedFields)!
+
+    // Scoped runs merge confidence per-field: only keys belonging to the scoped
+    // fields are overwritten; everything else (incl. admin-confirmed) survives.
+    if (scopedFields && a.field_confidence) {
+      const allowedKeys = new Set(scopedFields.flatMap(confidenceKeys))
+      const patch = Object.fromEntries(
+        Object.entries(a.field_confidence).filter(([k]) => allowedKeys.has(k))
+      )
+      if (Object.keys(patch).length > 0) {
+        const { data: row } = await supabase
+          .from('artists')
+          .select('enrichment_confidence')
+          .eq('sort_name', a.sort_name)
+          .single()
+        updateData.enrichment_confidence = { ...(row?.enrichment_confidence ?? {}), ...patch }
+      }
+    }
 
     const { error } = await supabase
       .from('artists')

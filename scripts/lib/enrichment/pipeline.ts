@@ -2,7 +2,7 @@ import { searchSoundCloud, searchInstagram, searchArtistBio } from './brave-sear
 import { scrapeSoundCloudProfile, validateWithOEmbed } from './soundcloud.js'
 import { searchDiscogsArtist } from './discogs.js'
 import { scrapeBandcampProfile } from './bandcamp.js'
-import { isComboEntry, extractInstagramHandle } from './name-utils.js'
+import { isComboEntry, extractInstagramHandle, normalizeSoundCloudUrl } from './name-utils.js'
 import { extractFestivalRootName, bioContainsFestivalName } from '../ingest-diff.js'
 import { sleep } from '../../scrapers/base.js'
 import { scoreImageCandidates } from './image-scorer.js'
@@ -73,6 +73,9 @@ export async function enrichArtist(
   const hasDiscogs = !!(discogsKey && discogsSecret)
   const graph = config.resolver === 'graph'
   const bioOnly = fields?.length === 1 && fields[0] === 'bio'
+  // Candidate collection runs for both; 'image-candidates' alone never touches the winner
+  const wantsImages = needsField(fields, 'image') || needsField(fields, 'image-candidates')
+  const candidatesOnly = !needsField(fields, 'image') && needsField(fields, 'image-candidates')
   const instagramCandidates: InstagramCandidate[] = []
   const imageCandidates: Array<{ url: string; source: string }> = []
   let scBio: string | null = null
@@ -87,19 +90,31 @@ export async function enrichArtist(
   let discogsLinksIg = false
   let discogsLinksBc = false
   let discogsConflictsSc = false
+  let braveScAgrees = false
+  let braveScConflict = false
   let bcSource: string | null = artist.bandcamp_url ? 'db' : null
   let locationSource: string | null = artist.city ? 'db' : null
 
   if (!bioOnly) {
     // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
-    if (hasBrave && needsField(fields, 'soundcloud') && !result.soundcloud_url) {
+    // Field-scoped corroboration rule (ADR 011): when the run covers this field,
+    // Brave runs even if a value exists — as a conflict-detection node. Runs that
+    // don't cover the field skip it entirely.
+    if (hasBrave && needsField(fields, 'soundcloud') && (!result.soundcloud_url || graph)) {
       config.onProgress?.(artist.name, 'Brave → SoundCloud')
       try {
         const scUrl = await searchSoundCloud(artist.name, braveApiKey!, config.searchKeywords)
-        if (scUrl) {
+        if (scUrl && !result.soundcloud_url) {
           result.soundcloud_url = scUrl
           result.sources.push('brave-search-sc')
           scSource = 'brave'
+        } else if (scUrl && result.soundcloud_url) {
+          if (normalizeSoundCloudUrl(scUrl) === normalizeSoundCloudUrl(result.soundcloud_url)) {
+            braveScAgrees = true
+          } else {
+            braveScConflict = true
+            result.review_notes.push(`SoundCloud conflict: Brave top result ${scUrl} vs existing ${result.soundcloud_url}`)
+          }
         }
       } catch (err: any) {
         if (err.message?.includes('rate limit')) throw err
@@ -109,7 +124,7 @@ export async function enrichArtist(
     }
 
     // ── Step 2: Find Instagram via Brave ───────────────────────────────────
-    if (hasBrave && needsField(fields, 'instagram') && !result.instagram_url) {
+    if (hasBrave && needsField(fields, 'instagram') && (!result.instagram_url || graph)) {
       config.onProgress?.(artist.name, 'Brave → Instagram')
       try {
         const igUrl = await searchInstagram(artist.name, braveApiKey!, config.searchKeywords)
@@ -138,7 +153,7 @@ export async function enrichArtist(
 
     // ── Step 3: Discogs (supplementary: image, Bandcamp, SC/IG fallback) ────
     if (hasDiscogs) {
-      const needsDiscogs = needsField(fields, 'image') ||
+      const needsDiscogs = wantsImages ||
                            (needsField(fields, 'bandcamp') && !result.bandcamp_url) ||
                            (needsField(fields, 'soundcloud') && !result.soundcloud_url) ||
                            needsField(fields, 'instagram')
@@ -201,7 +216,7 @@ export async function enrichArtist(
 
     // ── Step 4: Scrape SoundCloud profile ───────────────────────────────────
     if (result.soundcloud_url) {
-      const needsScrape = needsField(fields, 'image') ||
+      const needsScrape = wantsImages ||
                           needsField(fields, 'instagram') ||
                           (needsField(fields, 'soundcloud') && !result.soundcloud_embed_url) ||
                           (needsField(fields, 'bandcamp') && !result.bandcamp_url)
@@ -262,9 +277,12 @@ export async function enrichArtist(
     }
 
     // ── Score image candidates and pick best ────────────────────────────────
-    if (needsField(fields, 'image') && imageCandidates.length > 0) {
+    if (wantsImages && imageCandidates.length > 0) {
       const cfAccountId = config.cloudflareAccountId
       const cfApiToken = config.cloudflareApiToken
+      const unscored = () => imageCandidates.map(c => ({
+        ...c, score: 0, person_detected: false, person_count: 0, person_bbox_ratio: null,
+      }))
 
       if (cfAccountId && cfApiToken && imageCandidates.length > 1) {
         config.onProgress?.(artist.name, 'Scoring images')
@@ -275,19 +293,27 @@ export async function enrichArtist(
             dryRun: config.dryRun,
           })
           result.image_candidates = scored
-          const best = scored.reduce((a, b) => b.score > a.score ? b : a)
-          result.image_url = best.url
-          result.sources.push(best.source)
+          if (!candidatesOnly) {
+            const best = scored.reduce((a, b) => b.score > a.score ? b : a)
+            result.image_url = best.url
+            result.sources.push(best.source)
+          }
         } catch (err: any) {
           result.review_notes.push(`Image scoring failed, using priority fallback: ${err.message}`)
+          result.image_candidates = unscored()
+          if (!candidatesOnly) {
+            const fallback = imageCandidates[0]
+            result.image_url = fallback.url
+            result.sources.push(fallback.source)
+          }
+        }
+      } else {
+        result.image_candidates = unscored()
+        if (!candidatesOnly) {
           const fallback = imageCandidates[0]
           result.image_url = fallback.url
           result.sources.push(fallback.source)
         }
-      } else {
-        const fallback = imageCandidates[0]
-        result.image_url = fallback.url
-        result.sources.push(fallback.source)
       }
     }
 
@@ -346,7 +372,17 @@ export async function enrichArtist(
     const igAgreeing = finalIgHandle
       ? instagramCandidates.filter(c => extractInstagramHandle(c.url)?.toLowerCase() === finalIgHandle).map(c => c.source)
       : []
-    const igConflict = result.review_notes.some(n => n.startsWith('Instagram conflict'))
+    // Conflict = resolveInstagram flagged one, or any candidate handle differs from
+    // the final value (covers the existing-DB-value path resolveInstagram never sees)
+    const igCandidateConflict = !!finalIgHandle && instagramCandidates.some(c => {
+      const h = extractInstagramHandle(c.url)?.toLowerCase()
+      return !!h && h !== finalIgHandle
+    })
+    const igConflict = result.review_notes.some(n => n.startsWith('Instagram conflict')) || igCandidateConflict
+    if (igCandidateConflict && !result.review_notes.some(n => n.startsWith('Instagram conflict'))) {
+      const differing = instagramCandidates.filter(c => extractInstagramHandle(c.url)?.toLowerCase() !== finalIgHandle)
+      result.review_notes.push(`Instagram conflict: ${differing.map(c => `${c.source} found ${c.url}`).join('; ')} vs existing ${result.instagram_url}`)
+    }
     discogsLinksIg = igAgreeing.includes('discogs-instagram')
     const igSource = igAgreeing[0] ?? (result.instagram_url ? 'db' : null)
 
@@ -364,6 +400,8 @@ export async function enrichArtist(
       discogs_links_ig: discogsLinksIg,
       discogs_links_bc: discogsLinksBc,
       discogs_conflicts_sc: discogsConflictsSc,
+      brave_sc_agrees: braveScAgrees,
+      brave_sc_conflict: braveScConflict,
       city: result.city,
       location_source: locationSource,
       soundcloud_followers: result.soundcloud_followers,
@@ -379,14 +417,13 @@ export async function enrichArtist(
         c.confidence = imageSourceConfidence(c.source, result.field_confidence)
       }
       const best = result.image_candidates.reduce((a, b) => rankImageCandidate(b) > rankImageCandidate(a) ? b : a)
-      if (best.url !== result.image_url) {
+      if (!candidatesOnly && best.url !== result.image_url) {
         result.image_url = best.url
         result.sources.push(best.source)
       }
-      result.field_confidence.image = {
-        level: best.confidence ?? 'low',
-        evidence: [`winner from ${best.source}`, `${result.image_candidates.length} candidates collected`],
-      }
+      result.field_confidence.image = candidatesOnly
+        ? { level: best.confidence ?? 'low', evidence: [`${result.image_candidates.length} candidates collected — winner untouched (candidates-only run)`] }
+        : { level: best.confidence ?? 'low', evidence: [`winner from ${best.source}`, `${result.image_candidates.length} candidates collected`] }
     } else if (result.image_url) {
       result.field_confidence.image = {
         level: imageSourceConfidence(result.sources.find(s => s.includes('image')) ?? '', result.field_confidence),

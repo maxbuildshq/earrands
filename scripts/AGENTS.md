@@ -38,6 +38,8 @@ npm run enrich -- --fields=instagram,image             # comma-separated
 npm run enrich -- --fields=followers                   # refetch just SoundCloud follower count
 npm run enrich -- --apply=enrichment-review/X.json     # apply reviewed file to DB
 npm run enrich -- --resolver=graph                     # MusicBrainz corroboration + per-field confidence (default: legacy)
+npm run enrich -- --fields=image-candidates --resolver=graph --limit=25
+                                                       # backfill candidate sets only — image_url winner + enrichment_status untouched
 ```
 
 ## Adding a Festival (automated ingest)
@@ -148,7 +150,9 @@ Skips combo/temporary artist entries (B2B placeholders with `is_collective: fals
 Opt-in entity-resolution mode; default stays `legacy` (behavior unchanged). Adds:
 - **MusicBrainz corroboration** (`musicbrainz.ts`) — evidence-only, never supplies field values. Core data (URL relations) is CC0; 1 req/s + User-Agent required. Non-exact name matches are discarded (MB search score is useless for disambiguation). See `docs/spikes/2026-07-enrichment-source-spike.md`.
 - **Per-field confidence** (`confidence.ts`, pure logic) — `field_confidence: { <field>: { level, evidence[] } }` on `EnrichmentResult`. Identity = cross-link agreement between independent sources (e.g. Discogs page links the SC that Brave found). SC is the root node; SC-derived fields inherit its identity confidence.
-- **Image candidates from every source, tagged never excluded** — in graph mode Discogs images are always collected and confidence-tagged; the winner is re-ranked by (confidence tier, then DETR score). Wikidata and Spotify were evaluated and rejected (see spike doc).
+- **Image candidates from every source, tagged never excluded** — in graph mode Discogs images are always collected and confidence-tagged; the winner is re-ranked by confidence tier → SC avatar within tier → DETR score. Wikidata and Spotify were evaluated and rejected (see spike doc).
+- **Persistence** (migration 036): `artists.image_candidates jsonb` (full tagged candidate set) + `artists.enrichment_confidence jsonb` (per-field `{ level, evidence[] }`). Applied on `--apply`; scoped runs merge only their own confidence keys (admin-confirmed values on other fields survive).
+- **Backfill** (`--fields=image-candidates`): collects/scores/persists candidates only; never touches `image_url`, `enrichment_status`, or `enriched_at`. Field-scoped corroboration rule: Brave searches run only when the selected fields need them (or from scratch); within a covered field they run even if a value exists, for conflict detection.
 
 ### Rate limits
 
