@@ -54,7 +54,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --resolver=graph                   MusicBrainz corroboration + per-field confidence (default: legacy)
   npm run enrich -- --fields=image-candidates          Backfill candidate sets only — image_url winner + enrichment_status untouched
 
-Fields: image, instagram, soundcloud, bandcamp, bio, location, followers
+Fields: image, image-candidates, instagram, soundcloud, bandcamp, discogs, bio, location, followers
 
 Note: --fields=X scopes both what's fetched AND what's written to the DB on apply — other
 columns present in the review JSON (carried over from the current DB row) are never touched.`)
