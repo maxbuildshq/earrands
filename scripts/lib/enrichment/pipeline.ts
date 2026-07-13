@@ -6,6 +6,8 @@ import { isComboEntry, extractInstagramHandle } from './name-utils.js'
 import { extractFestivalRootName, bioContainsFestivalName } from '../ingest-diff.js'
 import { sleep } from '../../scrapers/base.js'
 import { scoreImageCandidates } from './image-scorer.js'
+import { lookupMusicBrainzArtist, type MbEvidence } from './musicbrainz.js'
+import { computeFieldConfidence, imageSourceConfidence, rankImageCandidate, type ResolutionEvidence } from './confidence.js'
 import type { EnrichmentField, EnrichmentResult, ArtistRow, Confidence, BioResearch } from './types.js'
 
 function normalizeBandcampUrl(url: string): string {
@@ -20,6 +22,9 @@ export type PipelineConfig = {
   cloudflareApiToken?: string
   festivalName?: string
   fields?: EnrichmentField[]
+  // 'graph' adds MusicBrainz corroboration + per-field confidence and collects ALL
+  // image candidates (tagged, never excluded). Default 'legacy' keeps behavior unchanged.
+  resolver?: 'legacy' | 'graph'
   searchKeywords?: string
   dryRun?: boolean
   onProgress?: (artist: string, step: string) => void
@@ -66,6 +71,7 @@ export async function enrichArtist(
   const { braveApiKey, discogsKey, discogsSecret, fields } = config
   const hasBrave = !!braveApiKey
   const hasDiscogs = !!(discogsKey && discogsSecret)
+  const graph = config.resolver === 'graph'
   const bioOnly = fields?.length === 1 && fields[0] === 'bio'
   const instagramCandidates: InstagramCandidate[] = []
   const imageCandidates: Array<{ url: string; source: string }> = []
@@ -73,6 +79,16 @@ export async function enrichArtist(
   let discogsBio: string | null = null
 
   const verifiedDiscogsId = artist.discogs_id
+
+  // Evidence collected along the way for per-field confidence (graph mode)
+  let scSource: ResolutionEvidence['sc_source'] = artist.soundcloud_url ? 'db' : null
+  let mbEvidence: MbEvidence | null = null
+  let discogsLinksSc = false
+  let discogsLinksIg = false
+  let discogsLinksBc = false
+  let discogsConflictsSc = false
+  let bcSource: string | null = artist.bandcamp_url ? 'db' : null
+  let locationSource: string | null = artist.city ? 'db' : null
 
   if (!bioOnly) {
     // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
@@ -83,6 +99,7 @@ export async function enrichArtist(
         if (scUrl) {
           result.soundcloud_url = scUrl
           result.sources.push('brave-search-sc')
+          scSource = 'brave'
         }
       } catch (err: any) {
         if (err.message?.includes('rate limit')) throw err
@@ -104,6 +121,19 @@ export async function enrichArtist(
         result.review_notes.push(`Brave IG search failed: ${err.message}`)
       }
       await sleep(300)
+    }
+
+    // ── MusicBrainz corroboration lookup (graph resolver only) ──────────────
+    // Evidence-only: MB never supplies field values, it confirms identities
+    // found elsewhere via its CC0 URL relations. Removable without side effects.
+    if (graph) {
+      config.onProgress?.(artist.name, 'MusicBrainz corroboration')
+      try {
+        mbEvidence = await lookupMusicBrainzArtist(artist.name)
+        if (mbEvidence) result.sources.push('musicbrainz')
+      } catch (err: any) {
+        result.review_notes.push(`MusicBrainz lookup failed: ${err.message}`)
+      }
     }
 
     // ── Step 3: Discogs (supplementary: image, Bandcamp, SC/IG fallback) ────
@@ -128,9 +158,17 @@ export async function enrichArtist(
               discogs.soundcloud_url !== result.soundcloud_url
             )
             const discogsHasCrossRef = !!(discogs.instagram_url || discogs.soundcloud_url)
-            if (discogsHasCrossRef && !discogsConflictsWithKnownSc) {
+            discogsConflictsSc = discogsConflictsWithKnownSc
+            discogsLinksSc = !!(result.soundcloud_url && discogs.soundcloud_url === result.soundcloud_url)
+            discogsLinksBc = !!(result.bandcamp_url && discogs.bandcamp_url && normalizeBandcampUrl(discogs.bandcamp_url) === result.bandcamp_url)
+            if (graph || (discogsHasCrossRef && !discogsConflictsWithKnownSc)) {
+              // Graph mode: candidates from every source are always collected and
+              // confidence-tagged — never excluded (tagging ranks the algo pick).
               for (let i = 0; i < discogs.all_images.length; i++) {
                 imageCandidates.push({ url: discogs.all_images[i], source: i === 0 ? 'discogs-image' : `discogs-image-${i + 1}` })
+              }
+              if (graph && (!discogsHasCrossRef || discogsConflictsWithKnownSc)) {
+                result.review_notes.push('Discogs images collected but low-confidence: no verified cross-reference to a known social profile')
               }
             } else if (discogs.all_images.length > 0) {
               result.review_notes.push('Discogs images skipped: no verified cross-reference to a known social profile')
@@ -139,10 +177,12 @@ export async function enrichArtist(
             if (!result.bandcamp_url && discogs.bandcamp_url) {
               result.bandcamp_url = normalizeBandcampUrl(discogs.bandcamp_url)
               result.sources.push('discogs-bandcamp')
+              bcSource = 'discogs-bandcamp'
             }
             if (!result.soundcloud_url && discogs.soundcloud_url) {
               result.soundcloud_url = discogs.soundcloud_url
               result.sources.push('discogs-soundcloud')
+              scSource = 'discogs'
             }
             if (discogs.instagram_url) {
               instagramCandidates.push({ url: discogs.instagram_url, source: 'discogs-instagram' })
@@ -184,6 +224,7 @@ export async function enrichArtist(
           if (!result.bandcamp_url && profile.bandcamp_url) {
             result.bandcamp_url = normalizeBandcampUrl(profile.bandcamp_url)
             result.sources.push('soundcloud-bandcamp')
+            bcSource = 'soundcloud-bandcamp'
           }
           if (!result.soundcloud_embed_url) {
             result.soundcloud_embed_url = result.soundcloud_url
@@ -193,6 +234,7 @@ export async function enrichArtist(
             result.city = profile.city
             result.country_code = profile.country_code
             result.sources.push('soundcloud-location')
+            locationSource = 'soundcloud-location'
           }
           // Capture followers whenever the profile was scraped — same call, so any run fills it in for free.
           if (profile.followers_count != null) {
@@ -215,6 +257,7 @@ export async function enrichArtist(
         result.city = bc.city
         result.country_code = bc.country_code
         result.sources.push('bandcamp-location')
+        locationSource = 'bandcamp-location'
       }
     }
 
@@ -295,6 +338,61 @@ export async function enrichArtist(
 
     result.bio_research = bioResearch
     result.sources.push('bio-research')
+  }
+
+  // ── Per-field confidence + candidate tagging (graph resolver only) ───────
+  if (graph) {
+    const finalIgHandle = extractInstagramHandle(result.instagram_url ?? '')?.toLowerCase()
+    const igAgreeing = finalIgHandle
+      ? instagramCandidates.filter(c => extractInstagramHandle(c.url)?.toLowerCase() === finalIgHandle).map(c => c.source)
+      : []
+    const igConflict = result.review_notes.some(n => n.startsWith('Instagram conflict'))
+    discogsLinksIg = igAgreeing.includes('discogs-instagram')
+    const igSource = igAgreeing[0] ?? (result.instagram_url ? 'db' : null)
+
+    result.field_confidence = computeFieldConfidence({
+      soundcloud_url: result.soundcloud_url,
+      sc_source: scSource,
+      instagram_url: result.instagram_url,
+      ig_source: igSource,
+      ig_agreeing_sources: igAgreeing,
+      ig_conflict: igConflict,
+      bandcamp_url: result.bandcamp_url,
+      bc_source: bcSource,
+      discogs_id: result.discogs_id,
+      discogs_links_sc: discogsLinksSc,
+      discogs_links_ig: discogsLinksIg,
+      discogs_links_bc: discogsLinksBc,
+      discogs_conflicts_sc: discogsConflictsSc,
+      city: result.city,
+      location_source: locationSource,
+      soundcloud_followers: result.soundcloud_followers,
+      mb: mbEvidence,
+    })
+
+    // Tag every candidate with its source's identity confidence; re-rank the
+    // winner by confidence tier — within a tier the SC avatar wins (usually the
+    // most up-to-date, and the SC profile is the identity target anyway), then
+    // DETR score breaks remaining ties. Tags never exclude.
+    if (result.image_candidates?.length) {
+      for (const c of result.image_candidates) {
+        c.confidence = imageSourceConfidence(c.source, result.field_confidence)
+      }
+      const best = result.image_candidates.reduce((a, b) => rankImageCandidate(b) > rankImageCandidate(a) ? b : a)
+      if (best.url !== result.image_url) {
+        result.image_url = best.url
+        result.sources.push(best.source)
+      }
+      result.field_confidence.image = {
+        level: best.confidence ?? 'low',
+        evidence: [`winner from ${best.source}`, `${result.image_candidates.length} candidates collected`],
+      }
+    } else if (result.image_url) {
+      result.field_confidence.image = {
+        level: imageSourceConfidence(result.sources.find(s => s.includes('image')) ?? '', result.field_confidence),
+        evidence: ['single candidate, unscored'],
+      }
+    }
   }
 
   // ── Compute confidence ──────────────────────────────────────────────────
