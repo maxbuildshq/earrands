@@ -141,6 +141,7 @@ function fieldColumns(field: EnrichmentField): string[] {
     case 'bandcamp': return ['bandcamp_url']
     case 'location': return ['city', 'country_code']
     case 'followers': return ['soundcloud_followers']
+    case 'discogs': return ['discogs_id']
     case 'bio': return ['bio_research', 'bio_sources']
   }
 }
@@ -156,6 +157,7 @@ function confidenceKeys(field: EnrichmentField): string[] {
     case 'bandcamp': return ['bandcamp']
     case 'location': return ['location']
     case 'followers': return ['followers']
+    case 'discogs': return ['discogs']
     case 'bio': return []
   }
 }
@@ -196,6 +198,7 @@ function buildUpdateData(a: EnrichmentResult, scopedFields?: EnrichmentField[]):
   if (allowed.has('city') && a.city) data.city = a.city
   if (allowed.has('country_code') && a.country_code) data.country_code = a.country_code
   if (allowed.has('soundcloud_followers') && a.soundcloud_followers != null) data.soundcloud_followers = a.soundcloud_followers
+  if (allowed.has('discogs_id') && a.discogs_id != null) data.discogs_id = a.discogs_id
   if (allowed.has('image_candidates') && a.image_candidates?.length) data.image_candidates = a.image_candidates
   if (allowed.has('bio_research') && a.bio_research) {
     data.bio_research = a.bio_research

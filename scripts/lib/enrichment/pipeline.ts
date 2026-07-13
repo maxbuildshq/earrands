@@ -157,6 +157,7 @@ export async function enrichArtist(
     // ── Step 3: Discogs (supplementary: image, Bandcamp, SC/IG fallback) ────
     if (hasDiscogs) {
       const needsDiscogs = wantsImages ||
+                           needsField(fields, 'discogs') ||
                            (needsField(fields, 'bandcamp') && !result.bandcamp_url) ||
                            (needsField(fields, 'soundcloud') && !result.soundcloud_url) ||
                            needsField(fields, 'instagram')

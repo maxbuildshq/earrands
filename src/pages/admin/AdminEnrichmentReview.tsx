@@ -31,7 +31,7 @@ const CONFIDENCE_FILTERS = ['all', 'high', 'medium', 'low', 'unscored'] as const
 type ConfidenceFilter = (typeof CONFIDENCE_FILTERS)[number]
 
 // Fields that can be re-enriched (map to enrich --fields=)
-const ENRICH_FIELDS = ['image', 'soundcloud', 'instagram', 'bandcamp', 'location', 'followers', 'bio'] as const
+const ENRICH_FIELDS = ['image', 'soundcloud', 'instagram', 'bandcamp', 'discogs', 'location', 'followers', 'bio'] as const
 
 // Queue grouping = aggregated confidence: the weakest identity-critical field
 // (SC, image, IG) sets the group; per-field chips carry the detail (ADR 011)
@@ -59,22 +59,35 @@ function candidateRank(c: ImageCandidate): number {
   return tier * 1000 + (c.source.startsWith('soundcloud') ? 500 : 0) + Math.min(c.score, 499)
 }
 
+// Semantic color-coding: hi = accent (solid, trusted), med = accent outline
+// (plausible, unconfirmed), lo = white on negative (needs attention)
 const CHIP_STYLE: Record<Level, string> = {
-  high: 'border border-accent text-accent',
-  medium: 'border border-border text-text-secondary',
+  high: 'bg-accent text-surface',
+  medium: 'border border-accent-dim text-accent-dim',
   low: 'bg-negative text-white',
 }
 
+const CHIP_LABEL: Record<Level, string> = { high: 'hi', medium: 'med', low: 'lo' }
+
+// Instant tooltip with the full evidence trail — why we believe this field,
+// what corroborates it — for every level, not just conflicts
 function ConfidenceChip({ fc }: { fc: FieldConfidence | undefined }) {
+  const [open, setOpen] = useState(false)
   if (!fc) {
-    return <span className="inline-flex px-1 text-[10px] font-mono uppercase leading-tight border border-border text-border" title="No confidence data — enriched before per-field confidence existed">—</span>
+    return <span className="inline-flex px-1 text-[10px] font-mono uppercase leading-tight border border-border text-border cursor-help" title="No confidence data — enriched before per-field confidence existed">—</span>
   }
   return (
-    <span
-      className={`inline-flex px-1 text-[10px] font-mono font-bold uppercase leading-tight cursor-help ${CHIP_STYLE[fc.level]}`}
-      title={fc.evidence.join('\n')}
-    >
-      {fc.level}
+    <span className="relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <span className={`inline-flex px-1 text-[10px] font-mono font-bold uppercase leading-tight cursor-help ${CHIP_STYLE[fc.level]}`}>
+        {CHIP_LABEL[fc.level]}
+      </span>
+      {open && (
+        <span className="absolute z-[110] left-0 top-full mt-1 w-max max-w-72 bg-surface border border-border shadow-lg px-2 py-1.5 space-y-0.5 pointer-events-none">
+          {fc.evidence.map((e, i) => (
+            <span key={i} className="block font-mono text-[11px] normal-case font-normal leading-snug text-text-primary">{e}</span>
+          ))}
+        </span>
+      )}
     </span>
   )
 }
@@ -127,7 +140,7 @@ function Kbd({ children }: { children: ReactNode }) {
 }
 
 // Full-size preview on hover, no delay — every second matters in review
-function HoverPreview({ src, children }: { src: string; children: ReactNode }) {
+function HoverPreview({ src, label, children }: { src: string; label?: string; children: ReactNode }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -144,6 +157,11 @@ function HoverPreview({ src, children }: { src: string; children: ReactNode }) {
       {children}
       {pos && (
         <div className="fixed z-[100] pointer-events-none" style={{ top: pos.top, left: pos.left }}>
+          {label && (
+            <div className="bg-surface/95 border border-border border-b-0 px-2 py-1 font-mono text-[11px] uppercase tracking-wider text-text-primary">
+              {label}
+            </div>
+          )}
           <img src={src} alt="" className="w-80 h-80 object-cover border border-border shadow-lg" />
         </div>
       )}
@@ -157,12 +175,20 @@ function Carousel({ artist, onPick }: { artist: Artist; onPick: (url: string) =>
     [artist.image_candidates],
   )
   const selected = artist.image_url
+  const winnerSource = candidates.find(c => c.url === selected)?.source
 
   return (
     <div className="w-44 shrink-0 space-y-1.5">
       {selected ? (
-        <HoverPreview src={selected}>
-          <img src={selected} alt="" className="w-44 h-44 object-cover border border-border" />
+        <HoverPreview src={selected} label={winnerSource ? sourceLabel(winnerSource) : 'current'}>
+          <div className="relative">
+            <img src={selected} alt="" className="w-44 h-44 object-cover border border-border" />
+            {winnerSource && (
+              <span className="absolute bottom-0 inset-x-0 bg-surface/90 text-text-secondary text-[10px] font-mono uppercase leading-tight text-center px-0.5">
+                {sourceLabel(winnerSource)}
+              </span>
+            )}
+          </div>
         </HoverPreview>
       ) : (
         <div className="w-44 h-44 bg-surface-raised border border-border flex items-center justify-center font-mono text-xs text-text-secondary">
@@ -186,7 +212,7 @@ function CandidateThumb({ candidate, selected, onPick }: {
   onPick: (url: string) => void
 }) {
   return (
-    <HoverPreview src={candidate.url}>
+    <HoverPreview src={candidate.url} label={`${sourceLabel(candidate.source)}${candidate.confidence ? ` · ${candidate.confidence}` : ''}`}>
       <button
         onClick={() => !selected && onPick(candidate.url)}
         className={`relative block cursor-pointer ${selected ? 'outline-2 outline-accent' : 'opacity-80 hover:opacity-100'}`}
@@ -219,7 +245,7 @@ function FieldRow({ label, chip, checked, onCheck, conflictLines, children }: {
         ) : (
           <span className="w-[13px] shrink-0" />
         )}
-        <span className="w-20 shrink-0 text-xs uppercase tracking-wider text-text-secondary">{label}</span>
+        <span className="w-9 shrink-0 text-xs uppercase tracking-wider text-text-secondary">{label}</span>
         {chip !== null && <ConfidenceChip fc={chip ?? undefined} />}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
@@ -236,12 +262,16 @@ function FieldRow({ label, chip, checked, onCheck, conflictLines, children }: {
   )
 }
 
+// All bio versions switchable in place — read, compare, activate without leaving the card
 function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boolean; onCheck: (v: boolean) => void }) {
   const activateBio = useActivateBio()
-  const options = [
-    { key: 'festival', label: 'Festival', content: artist.bio_festival, warning: artist.bio_research?.festival_bio_flagged ? 'contains festival name' : undefined },
-    { key: 'generated', label: 'Generated', content: artist.bio_generated },
-  ].filter(o => o.content && o.content !== artist.bio)
+  const [tab, setTab] = useState('active')
+  const versions = [
+    { key: 'active', label: 'Active', content: artist.bio, activatable: false },
+    { key: 'festival', label: 'Festival', content: artist.bio_festival, activatable: artist.bio_festival !== artist.bio, warning: artist.bio_research?.festival_bio_flagged ? 'contains festival name' : undefined },
+    { key: 'generated', label: 'Generated', content: artist.bio_generated, activatable: artist.bio_generated !== artist.bio },
+  ].filter(v => v.content)
+  const current = versions.find(v => v.key === tab) ?? versions[0]
 
   return (
     <div className="flex-1 min-w-0 space-y-1">
@@ -249,23 +279,35 @@ function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boole
         <input type="checkbox" checked={checked} onChange={e => onCheck(e.target.checked)} className="accent-accent shrink-0" title="Include bio in re-enrichment" />
         <span className="text-xs uppercase tracking-wider text-text-secondary">Bio</span>
         {artist.bio_source && <span className="text-[10px] font-mono text-accent uppercase">{artist.bio_source}</span>}
-        {options.map(o => (
+        <span className="flex gap-0.5 ml-1">
+          {versions.map(v => (
+            <button
+              key={v.key}
+              className={`font-mono text-[10px] px-1.5 py-0.5 uppercase tracking-wider ${
+                current?.key === v.key ? 'bg-accent text-surface font-bold' : 'text-text-secondary hover:text-accent border border-border'
+              }`}
+              onClick={() => setTab(v.key)}
+            >
+              {v.label}{v.warning ? ' ⚠' : ''}
+            </button>
+          ))}
+        </span>
+        {current?.activatable && (
           <button
-            key={o.key}
-            className="font-mono text-[10px] text-accent hover:underline uppercase tracking-wider"
-            title={`${o.content!.slice(0, 300)}${o.warning ? `\n⚠ ${o.warning}` : ''}`}
-            onClick={() => activateBio.mutate({ artistId: artist.id, source: o.key })}
+            className="font-mono text-[10px] text-accent hover:underline uppercase tracking-wider font-bold"
+            onClick={() => activateBio.mutate({ artistId: artist.id, source: current.key })}
           >
-            Use {o.label}{o.warning ? ' ⚠' : ''}
+            Use this
           </button>
-        ))}
+        )}
       </div>
-      {artist.bio ? (
+      {current?.warning && <p className="font-mono text-[11px] bg-negative text-white px-1.5 py-0.5 inline-block">⚠ {current.warning}</p>}
+      {current?.content ? (
         <p className="font-mono text-xs text-text-primary leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line pr-1">
-          {artist.bio}
+          {current.content}
         </p>
       ) : (
-        <p className="font-mono text-xs text-border">No active bio</p>
+        <p className="font-mono text-xs text-border">No bio</p>
       )}
     </div>
   )
@@ -383,7 +425,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
             build={bcBuild}
           />
         </FieldRow>
-        <FieldRow label="Discogs" chip={fc.discogs} conflictLines={conflictLines('discogs')}>
+        <FieldRow label="DC" chip={fc.discogs} checked={enrichFields.has('discogs')} onCheck={v => toggleField('discogs', v)} conflictLines={conflictLines('discogs')}>
           <InlineEdit
             value={artist.discogs_id ? String(artist.discogs_id) : ''}
             displayValue={artist.discogs_id ? String(artist.discogs_id) : null}
@@ -420,7 +462,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
           </Button>
         )}
         {artist.enrichment_status !== 'flagged' && (
-          <Button variant="secondary" fullWidth={false} className="!text-xs !px-2 !py-1.5 !text-negative" onClick={onFlag}>
+          <Button variant="secondary" fullWidth={false} className="!text-xs !px-2 !py-1.5 !bg-negative !text-white !border-negative" onClick={onFlag}>
             Flag
           </Button>
         )}
@@ -445,6 +487,7 @@ export default function AdminEnrichmentReview() {
   const [focusIndex, setFocusIndex] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkFields, setBulkFields] = useState<Set<string>>(new Set())
+  const [searchKeywords, setSearchKeywords] = useState('')
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const { data: festivals = [] } = useAdminFestivals()
@@ -486,6 +529,7 @@ export default function AdminEnrichmentReview() {
       type: 'enrich',
       artist_sort_names: [artist.sort_name],
       ...(fields.length > 0 && { fields }),
+      ...(searchKeywords && { search_keywords: searchKeywords }),
     })
   }
 
@@ -496,6 +540,7 @@ export default function AdminEnrichmentReview() {
       type: 'enrich',
       artist_sort_names: names,
       ...(bulkFields.size > 0 && { fields: [...bulkFields] }),
+      ...(searchKeywords && { search_keywords: searchKeywords }),
     })
     setSelected(new Set())
   }
@@ -607,8 +652,15 @@ export default function AdminEnrichmentReview() {
             {f}
           </label>
         ))}
+        <input
+          className="bg-transparent border-b border-border text-text-primary font-mono text-xs w-40 outline-none placeholder:text-border focus:border-accent"
+          value={searchKeywords}
+          onChange={e => setSearchKeywords(e.target.value)}
+          placeholder="Search keywords..."
+          title="Optional keywords appended to Brave search queries (e.g. &quot;drum &amp; bass&quot;)"
+        />
         <Button
-          variant="secondary"
+          variant="accent-outline"
           fullWidth={false}
           className="!text-xs !px-3 !py-1"
           disabled={selected.size === 0 || createJob.isPending}
