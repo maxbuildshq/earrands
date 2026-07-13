@@ -24,6 +24,13 @@ const autoApply = args.includes('--auto-apply')
 const pollJobs = args.includes('--poll-jobs')
 const pollInterval = parseInt(args.find(a => a.startsWith('--poll-interval='))?.split('=')[1] ?? '30', 10)
 const searchKeywords = args.find(a => a.startsWith('--search-keywords='))?.split('=').slice(1).join('=') || undefined
+const resolverArg = args.find(a => a.startsWith('--resolver='))?.split('=')[1]
+
+if (resolverArg && resolverArg !== 'legacy' && resolverArg !== 'graph') {
+  console.error(`Invalid --resolver=${resolverArg} (expected: legacy | graph)`)
+  process.exit(1)
+}
+const resolver = (resolverArg ?? 'legacy') as 'legacy' | 'graph'
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`Usage:
@@ -44,6 +51,7 @@ if (args.includes('--help') || args.includes('-h')) {
   npm run enrich -- --poll-jobs                        Poll enrichment_jobs table for pending jobs
   npm run enrich -- --poll-jobs --poll-interval=60     Custom poll interval (seconds, default: 30)
   npm run enrich -- --search-keywords="drum & bass"   Append keywords to Brave search queries
+  npm run enrich -- --resolver=graph                   MusicBrainz corroboration + per-field confidence (default: legacy)
 
 Fields: image, instagram, soundcloud, bandcamp, bio, location, followers
 
@@ -63,6 +71,7 @@ if (dryRun) console.log(chalk.yellow('DRY RUN — no DB writes'))
 if (fresh) console.log(chalk.yellow('FRESH — ignoring existing field values'))
 if (fields) console.log(chalk.dim(`Fields: ${fields.join(', ')}`))
 if (searchKeywords) console.log(chalk.dim(`Search keywords: ${searchKeywords}`))
+if (resolver === 'graph') console.log(chalk.dim('Resolver: graph (MusicBrainz corroboration + per-field confidence)'))
 if (limit) console.log(chalk.dim(`Limit: ${limit} artists`))
 if (resume) console.log(chalk.dim('Resuming from last progress'))
 console.log()
@@ -344,6 +353,7 @@ async function main() {
     fields,
     dryRun,
     searchKeywords,
+    resolver,
     onProgress: (artist, step) => {
       process.stdout.write(`\r  ${chalk.dim(`[${step}]`)} ${artist}${''.padEnd(30)}`)
     },

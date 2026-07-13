@@ -2,6 +2,9 @@ export type EnrichmentField = 'image' | 'instagram' | 'soundcloud' | 'bandcamp' 
 
 export type Confidence = 'high' | 'medium' | 'low'
 
+// Per-field confidence with a human-readable evidence trail (graph resolver only)
+export type FieldConfidence = { level: Confidence; evidence: string[] }
+
 export type BioSource = {
   url: string
   title: string
@@ -25,6 +28,7 @@ export type ImageCandidate = {
   person_detected: boolean
   person_count: number
   person_bbox_ratio: number | null
+  confidence?: Confidence
   error?: string
 }
 
@@ -46,6 +50,7 @@ export type EnrichmentResult = {
   bio_festival: string | null
   bio_research: BioResearch | null
   confidence: Confidence
+  field_confidence?: Record<string, FieldConfidence> | null
   sources: string[]
   needs_review: boolean
   review_notes: string[]

@@ -101,6 +101,7 @@ Full rationale in `docs/decisions/`. These cause bugs if forgotten:
 - Deploy: `npx wrangler deploy`, NOT `wrangler pages deploy` ([006](docs/decisions/006-wrangler-deploy.md))
 - Marketing consent checkbox: unchecked by default (GDPR) ([007](docs/decisions/007-marketing-consent.md))
 - Design tokens are `--color-accent`/`--color-accent-dim` (not `acid`) and `--color-negative` (errors, negative-rating active state) is separate from `--color-live` (Live badge only); use the `Button`/`Input`/`Label` primitives in `src/components/ui/` for new UI ([010](docs/decisions/010-design-system-primitives.md))
+- Enrichment sources: identity = cross-link agreement, never name match; Spotify API + Wikidata are documented dead ends, festival press photos are admin-reference only (never displayed to users) — check the verdict table before proposing any data source ([011](docs/decisions/011-source-reliability-hierarchy.md))
 
 Forward-looking (not bug-prevention): iOS/Android migration app-size strategy — options open, principles to follow before the native build ([008](docs/decisions/008-ios-migration-app-size.md)).
 

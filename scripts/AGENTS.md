@@ -37,6 +37,7 @@ npm run enrich -- --fields=bandcamp                    # only fetch specific fie
 npm run enrich -- --fields=instagram,image             # comma-separated
 npm run enrich -- --fields=followers                   # refetch just SoundCloud follower count
 npm run enrich -- --apply=enrichment-review/X.json     # apply reviewed file to DB
+npm run enrich -- --resolver=graph                     # MusicBrainz corroboration + per-field confidence (default: legacy)
 ```
 
 ## Adding a Festival (automated ingest)
@@ -141,6 +142,13 @@ Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram
 10. **AI bio generation** (when `--fields=bio`, after apply) → calls `claude -p --model claude-sonnet-4-6 --thinking-budget-tokens 1024` per artist; writes result directly to `artists.bio_generated` in DB
 
 Skips combo/temporary artist entries (B2B placeholders with `is_collective: false` + `&`/`b2b`/`vs` in sort_name).
+
+### Graph resolver (`--resolver=graph`)
+
+Opt-in entity-resolution mode; default stays `legacy` (behavior unchanged). Adds:
+- **MusicBrainz corroboration** (`musicbrainz.ts`) — evidence-only, never supplies field values. Core data (URL relations) is CC0; 1 req/s + User-Agent required. Non-exact name matches are discarded (MB search score is useless for disambiguation). See `docs/spikes/2026-07-enrichment-source-spike.md`.
+- **Per-field confidence** (`confidence.ts`, pure logic) — `field_confidence: { <field>: { level, evidence[] } }` on `EnrichmentResult`. Identity = cross-link agreement between independent sources (e.g. Discogs page links the SC that Brave found). SC is the root node; SC-derived fields inherit its identity confidence.
+- **Image candidates from every source, tagged never excluded** — in graph mode Discogs images are always collected and confidence-tagged; the winner is re-ranked by (confidence tier, then DETR score). Wikidata and Spotify were evaluated and rejected (see spike doc).
 
 ### Rate limits
 
