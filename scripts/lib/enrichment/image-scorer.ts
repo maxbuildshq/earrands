@@ -1,4 +1,5 @@
 import type { ImageCandidate } from './types.js'
+import { recordUsage } from './rate-limit.js'
 
 export type ImageScorerConfig = {
   accountId: string
@@ -22,6 +23,7 @@ async function fetchImageBuffer(url: string): Promise<ArrayBuffer> {
 
 async function callDetr(imageBuffer: ArrayBuffer, config: ImageScorerConfig): Promise<DetrDetection[]> {
   const bytes = Array.from(new Uint8Array(imageBuffer))
+  recordUsage('workers-ai')
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/ai/run/@cf/facebook/detr-resnet-50`,
     {

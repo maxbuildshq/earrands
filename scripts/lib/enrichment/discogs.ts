@@ -1,5 +1,6 @@
 import { sleep } from '../../scrapers/base.js'
 import { normalizeUrl, normalizeSoundCloudUrl } from './name-utils.js'
+import { recordUsage } from './rate-limit.js'
 
 const DISCOGS_API = 'https://api.discogs.com'
 
@@ -24,6 +25,7 @@ export async function searchDiscogsArtist(
     per_page: '5',
   })
 
+  recordUsage('discogs')
   const res = await fetch(`${DISCOGS_API}/database/search?${params}`, {
     headers: {
       'Authorization': `Discogs key=${consumerKey}, secret=${consumerSecret}`,
@@ -54,6 +56,7 @@ async function fetchDiscogsArtist(
 ): Promise<DiscogsArtistResult | null> {
   await sleep(1000)
 
+  recordUsage('discogs')
   const res = await fetch(`${DISCOGS_API}/artists/${artistId}`, {
     headers: {
       'Authorization': `Discogs key=${consumerKey}, secret=${consumerSecret}`,

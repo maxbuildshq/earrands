@@ -1,5 +1,6 @@
 import { fetchWithCheerio, getBrowser } from '../../scrapers/base.js'
 import { normalizeUrl } from './name-utils.js'
+import { recordUsage } from './rate-limit.js'
 
 export type SoundCloudProfile = {
   image_url: string | null
@@ -23,6 +24,7 @@ type WebProfile = {
 export async function scrapeSoundCloudProfile(profileUrl: string): Promise<SoundCloudProfile | null> {
   try {
     // Fetch static HTML for the image (og:image is in SSR HTML)
+    recordUsage('soundcloud', 2) // HTML fetch + web-profiles interception below
     const $ = await fetchWithCheerio(profileUrl)
     const image_url = extractProfileImage($)
     const track_urls = extractTrackUrls($, profileUrl)
@@ -182,6 +184,7 @@ export type OEmbedResult = {
 }
 
 export async function validateWithOEmbed(url: string): Promise<OEmbedResult | null> {
+  recordUsage('soundcloud')
   try {
     const params = new URLSearchParams({ url, format: 'json' })
     const res = await fetch(`https://soundcloud.com/oembed?${params}`)
