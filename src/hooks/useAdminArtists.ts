@@ -10,6 +10,7 @@ type ArtistFilters = {
   search?: string
   limit?: number
   offset?: number
+  hasCandidates?: boolean
 }
 
 export function useAdminArtists(filters: ArtistFilters = {}) {
@@ -19,6 +20,7 @@ export function useAdminArtists(filters: ArtistFilters = {}) {
   if (filters.search) params.search = filters.search
   if (filters.limit) params.limit = String(filters.limit)
   if (filters.offset) params.offset = String(filters.offset)
+  if (filters.hasCandidates) params.has_candidates = '1'
 
   return useQuery<ArtistListResponse>({
     queryKey: ['admin', 'artists', params],
@@ -73,6 +75,23 @@ export function useBulkUpdateArtists() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'artists'] })
+    },
+  })
+}
+
+// Approve whole artists: status → reviewed + all populated fields upgraded to
+// high confidence with an admin-approved stamp (server-side, see admin-artists)
+export function useApproveArtists() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ artistIds }: { artistIds: string[] }) =>
+      adminFetch<{ count: number }>('admin-artists', {
+        method: 'POST',
+        body: { action: 'approve', artist_ids: artistIds },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'artists'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'artist'] })
     },
   })
 }

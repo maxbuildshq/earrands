@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
     if (status && status !== 'all') {
       query = query.eq('enrichment_status', status)
     }
+    if (url.searchParams.get('has_candidates') === '1') {
+      query = query.not('image_candidates', 'is', null)
+    }
     if (search) {
       query = query.ilike('name', `%${search}%`)
     }
@@ -146,7 +149,7 @@ Deno.serve(async (req) => {
       'name', 'sort_name', 'bio', 'bio_festival', 'bio_generated', 'bio_source',
       'image_url', 'instagram_url', 'soundcloud_url', 'soundcloud_embed_url',
       'bandcamp_url', 'discogs_id', 'city', 'country_code',
-      'enrichment_status', 'enriched_at',
+      'enrichment_status', 'enriched_at', 'enrichment_confidence',
     ]
     const filtered: Record<string, unknown> = {}
     for (const key of allowed) {
@@ -206,6 +209,52 @@ Deno.serve(async (req) => {
         .single()
       if (error) return json({ error: error.message }, 500)
       return json({ data, refetched: scUrlChanged ? Object.keys(refetchedFields) : [] })
+    }
+
+    // Approve = human vetted the whole card (ADR 011): status → reviewed and every
+    // populated field's confidence upgrades to high with an admin-approved stamp;
+    // machine confidence is preserved inside the evidence trail as provenance.
+    if (action === 'approve') {
+      const { artist_ids } = body
+      if (!artist_ids?.length) return json({ error: 'Missing artist_ids' }, 400)
+
+      const { data: rows, error: fetchError } = await supabase
+        .from('artists')
+        .select('id, soundcloud_url, instagram_url, bandcamp_url, image_url, discogs_id, city, soundcloud_followers, enrichment_confidence')
+        .in('id', artist_ids)
+      if (fetchError) return json({ error: fetchError.message }, 500)
+
+      const stamp = `admin-approved ${new Date().toISOString().slice(0, 10)}`
+      const now = new Date().toISOString()
+      const fieldPresence: Array<[string, (r: Record<string, unknown>) => boolean]> = [
+        ['soundcloud', r => !!r.soundcloud_url],
+        ['instagram', r => !!r.instagram_url],
+        ['bandcamp', r => !!r.bandcamp_url],
+        ['image', r => !!r.image_url],
+        ['discogs', r => r.discogs_id != null],
+        ['location', r => !!r.city],
+        ['followers', r => r.soundcloud_followers != null],
+      ]
+
+      let updated = 0
+      for (const row of rows ?? []) {
+        const confidence: Record<string, { level: string; evidence: string[] }> =
+          { ...(row.enrichment_confidence ?? {}) }
+        for (const [field, present] of fieldPresence) {
+          if (!present(row as Record<string, unknown>)) continue
+          const prior = confidence[field]
+          const provenance = prior && prior.level !== 'high'
+            ? [`was ${prior.level}`, ...prior.evidence]
+            : prior?.evidence ?? []
+          confidence[field] = { level: 'high', evidence: [stamp, ...provenance.filter(e => !e.startsWith('admin-approved'))] }
+        }
+        const { error } = await supabase
+          .from('artists')
+          .update({ enrichment_status: 'reviewed', enriched_at: now, enrichment_confidence: confidence })
+          .eq('id', row.id)
+        if (!error) updated++
+      }
+      return json({ count: updated })
     }
 
     if (action === 'bulk_update') {

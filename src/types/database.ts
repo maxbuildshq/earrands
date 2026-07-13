@@ -89,7 +89,25 @@ export type Artist = {
   bio_generated: string | null
   bio_research: { festival_bio_flagged?: boolean } | null
   enrichment_status: string | null
+  image_candidates: ImageCandidate[] | null
+  enrichment_confidence: Record<string, FieldConfidence> | null
   created_at: string
+}
+
+export type ImageCandidate = {
+  url: string
+  source: string
+  score: number
+  confidence?: 'high' | 'medium' | 'low'
+  person_detected?: boolean
+  person_count?: number
+  person_bbox_ratio?: number | null
+  error?: string
+}
+
+export type FieldConfidence = {
+  level: 'high' | 'medium' | 'low'
+  evidence: string[]
 }
 
 export type SetArtist = {
