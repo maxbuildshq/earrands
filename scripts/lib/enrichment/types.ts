@@ -1,4 +1,6 @@
-export type EnrichmentField = 'image' | 'instagram' | 'soundcloud' | 'bandcamp' | 'bio' | 'location' | 'followers'
+// 'image-candidates' = collect/score/persist the candidate set only — the winner
+// (image_url) and enrichment_status are never touched (backfill mode, ADR 011)
+export type EnrichmentField = 'image' | 'image-candidates' | 'instagram' | 'soundcloud' | 'bandcamp' | 'bio' | 'location' | 'followers'
 
 export type Confidence = 'high' | 'medium' | 'low'
 
