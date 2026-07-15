@@ -26,6 +26,7 @@ export type ScrapedArtist = {
   name: string
   bio: string | null
   source_url: string | null
+  image_url?: string | null // festival press photo — admin visual reference only, never a display candidate (ADR 011)
 }
 
 export type ScrapedData = {

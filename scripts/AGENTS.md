@@ -12,6 +12,7 @@ npm run ingest -- --url=<festival-event-url>           # scrape → diff → gen
 npm run ingest -- --url=<url> --dry-run                # preview diff only
 npm run ingest -- --url=<url> --skip-bios              # skip artist bio pages
 npm run ingest -- --json=<path>                        # ingest from pre-scraped JSON
+npm run ingest -- --url=<url> --extract=llm            # force LLM extraction (skip adapter)
 
 # Artist normalization
 npm run parse-artists                                  # re-parse all artists globally
@@ -52,13 +53,21 @@ npm run ingest -- --url=<festival-event-url>
 
 Scrapes → diffs against DB → shows preview → generates a complete upsert SQL at `supabase/migrations/`. Run the SQL in Supabase SQL Editor.
 
-For festivals without an adapter, extract as JSON matching the `ScrapedData` schema (see `scripts/scrapers/types.ts`) and use:
+For festivals without an adapter, ingest **auto-falls back to LLM extraction** (`--extract=llm` forces it even when an adapter matches):
+
+1. `scripts/lib/extract/page-dump.ts` — Playwright dump: visible DOM text, embedded payloads (`__NUXT__`, `__NEXT_DATA__`, ld+json), JSON XHR responses, image URLs (festival press photos → `artists[].image_url`, admin visual reference only per ADR 011). Saved to `scraped/dump-<hostname>.json` for debugging.
+2. `scripts/lib/extract/llm-extract.ts` — local `claude` CLI (no API key). Small dumps: agentic single-shot (`--allowed-tools Read,Grep,Write`, writes the result file itself — chat output truncates on large extractions). Large payloads: `chunk.ts` finds the biggest array of similarly-shaped records (the lineup, whatever the framework) and extracts it in ~80 KB batches, merged in code. `validateScrapedData()` checks shape, slug/date/time formats, stage references, and duplicate sets before anything reaches the diff.
+3. Output feeds the **same diff preview / flags / SQL generation** as adapters — the diff review is the safety gate.
+
+**Framework-payload caveat (learned on Dekmantel):** embedded CMS data is only as good as the festival's data hygiene — always spot-check a few extracted times/dates against the live page before trusting a new adapter or LLM-extraction run.
+
+If validation fails, inspect the dump, hand-fix into a `--json` file, or write an adapter. **Adapters are for repeat organizers and LLM failures — never written speculatively.**
+
+Pre-extracted JSON still works directly:
 
 ```bash
 npm run ingest -- --json=scraped/some-festival.json
 ```
-
-**LLM extraction workflow:** For one-offs, extract data in Claude Code as JSON matching `ScrapedData`, save to a file, then run `--json`.
 
 ## Adding a Festival (manual fallback)
 
