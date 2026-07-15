@@ -5,6 +5,8 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 
 import { createInterface } from 'node:readline'
 import { findAdapter } from './scrapers/index.js'
 import { closeBrowser } from './scrapers/base.js'
+import { dumpPage } from './lib/extract/page-dump.js'
+import { extractWithLLM } from './lib/extract/llm-extract.js'
 import { computeDiff, computeFlags, generateSql, type DbState, type DiffEntry, type Flag } from './lib/ingest-diff.js'
 import type { ScrapedData } from './scrapers/types.js'
 
@@ -15,13 +17,17 @@ const urlArg = args.find(a => a.startsWith('--url='))?.split('=').slice(1).join(
 const jsonArg = args.find(a => a.startsWith('--json='))?.split('=').slice(1).join('=')
 const dryRun = args.includes('--dry-run')
 const skipBios = args.includes('--skip-bios')
+const forceLlm = args.find(a => a.startsWith('--extract='))?.split('=')[1] === 'llm'
 
 if (!urlArg && !jsonArg) {
   console.log(`Usage:
   npm run ingest -- --url=<festival-url>        Scrape and ingest
   npm run ingest -- --json=<path.json>          Ingest from JSON file
   npm run ingest -- --url=<url> --dry-run       Preview diff only
-  npm run ingest -- --url=<url> --skip-bios     Skip fetching artist bios`)
+  npm run ingest -- --url=<url> --skip-bios     Skip fetching artist bios
+  npm run ingest -- --url=<url> --extract=llm   Force LLM extraction (skip adapter)
+
+Sites without an adapter fall back to LLM extraction automatically.`)
   process.exit(0)
 }
 
@@ -56,17 +62,34 @@ async function getScrapedData(): Promise<ScrapedData> {
     return JSON.parse(readFileSync(jsonArg, 'utf-8'))
   }
 
-  const adapter = findAdapter(urlArg!)
-  if (!adapter) {
-    console.error(chalk.red(`No scraper adapter for URL: ${urlArg}`))
-    console.error('Available adapters:')
-    console.error('  - awakenings.com')
-    console.error('\nFor unsupported sites, extract data as JSON and use --json=<path>')
-    process.exit(1)
+  const adapter = forceLlm ? null : findAdapter(urlArg!)
+  if (adapter) {
+    console.log(`Using ${adapter.name} adapter`)
+    return adapter.adapter(urlArg!)
   }
 
-  console.log(`Using ${adapter.name} adapter`)
-  return adapter.adapter(urlArg!)
+  console.log(forceLlm
+    ? 'LLM extraction forced (--extract=llm)'
+    : `No scraper adapter for ${new URL(urlArg!).hostname} — falling back to LLM extraction`)
+  console.log('  Dumping page (DOM text, embedded payloads, XHR, images)...')
+  const dump = await dumpPage(urlArg!)
+
+  const dumpPath = `scraped/dump-${new URL(urlArg!).hostname}.json`
+  if (!existsSync('scraped')) mkdirSync('scraped', { recursive: true })
+  writeFileSync(dumpPath, JSON.stringify(dump, null, 2))
+  console.log(chalk.dim(`  Page dump saved to ${dumpPath}`))
+  console.log(`  Extracting with claude CLI (payloads: ${Object.keys(dump.payloads).join(', ') || 'none'}, ${dump.xhr.length} XHR, ${dump.images.length} images)...`)
+
+  const result = extractWithLLM(dump, dumpPath)
+  if (!result.ok) {
+    console.error(chalk.red('\n  LLM extraction failed validation:'))
+    for (const e of result.errors) console.error(chalk.red(`    ✕ ${e}`))
+    console.error(chalk.dim(`\n  Inspect the dump at ${dumpPath}, fix by hand into a --json file, or write an adapter.`))
+    process.exit(1)
+  }
+  for (const w of result.warnings) console.log(chalk.yellow(`  ! ${w}`))
+  console.log(chalk.green(`  Extracted: ${result.data.sets.length} sets, ${result.data.stages.length} stages, ${result.data.artists.length} artists`))
+  return result.data
 }
 
 // ── Step 2: Fetch current DB state ───────────────────────────────────────────

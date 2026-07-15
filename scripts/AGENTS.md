@@ -12,6 +12,7 @@ npm run ingest -- --url=<festival-event-url>           # scrape → diff → gen
 npm run ingest -- --url=<url> --dry-run                # preview diff only
 npm run ingest -- --url=<url> --skip-bios              # skip artist bio pages
 npm run ingest -- --json=<path>                        # ingest from pre-scraped JSON
+npm run ingest -- --url=<url> --extract=llm            # force LLM extraction (skip adapter)
 
 # Artist normalization
 npm run parse-artists                                  # re-parse all artists globally
@@ -52,13 +53,21 @@ npm run ingest -- --url=<festival-event-url>
 
 Scrapes → diffs against DB → shows preview → generates a complete upsert SQL at `supabase/migrations/`. Run the SQL in Supabase SQL Editor.
 
-For festivals without an adapter, extract as JSON matching the `ScrapedData` schema (see `scripts/scrapers/types.ts`) and use:
+For festivals without an adapter, ingest **auto-falls back to LLM extraction** (`--extract=llm` forces it even when an adapter matches):
+
+1. `scripts/lib/extract/page-dump.ts` — Playwright dump: visible DOM text, embedded payloads (`__NUXT__`, `__NEXT_DATA__`, ld+json), JSON XHR responses, image URLs (festival press photos → `artists[].image_url`, admin visual reference only per ADR 011). Saved to `scraped/dump-<hostname>.json` for debugging.
+2. `scripts/lib/extract/llm-extract.ts` — local `claude` CLI (no API key). Small dumps: agentic single-shot (`--allowed-tools Read,Grep,Write`, writes the result file itself — chat output truncates on large extractions). Large payloads: `chunk.ts` finds the biggest array of similarly-shaped records (the lineup, whatever the framework) and extracts it in ~80 KB batches, merged in code. `validateScrapedData()` checks shape, slug/date/time formats, stage references, and duplicate sets before anything reaches the diff.
+3. Output feeds the **same diff preview / flags / SQL generation** as adapters — the diff review is the safety gate.
+
+**Framework-payload caveat (learned on Dekmantel):** embedded CMS data is only as good as the festival's data hygiene — always spot-check a few extracted times/dates against the live page before trusting a new adapter or LLM-extraction run.
+
+If validation fails, inspect the dump, hand-fix into a `--json` file, or write an adapter. **Adapters are for repeat organizers and LLM failures — never written speculatively.**
+
+Pre-extracted JSON still works directly:
 
 ```bash
 npm run ingest -- --json=scraped/some-festival.json
 ```
-
-**LLM extraction workflow:** For one-offs, extract data in Claude Code as JSON matching `ScrapedData`, save to a file, then run `--json`.
 
 ## Adding a Festival (manual fallback)
 
@@ -156,7 +165,7 @@ Opt-in entity-resolution mode; default stays `legacy` (behavior unchanged). Adds
 
 ### Rate limits & usage accounting
 
-Brave Search: **2,000 queries/month** free tier (override via `BRAVE_MONTHLY_QUOTA`). Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. MusicBrainz: 1 req/sec + User-Agent. Bio research: 1 Brave query per artist (counts against monthly quota).
+Brave Search: **1,000 queries/month** free tier (override via `BRAVE_MONTHLY_QUOTA`). Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. MusicBrainz: 1 req/sec + User-Agent. Bio research: 1 Brave query per artist (counts against monthly quota).
 
 Every outbound client records real API consumption via `rate-limit.ts` (`recordUsage`, dry runs included — the calls happened); `enrich-artists.ts` flushes counts to the `api_usage` table (migration 037, service-role-only `increment_api_usage` RPC) and prints a **preflight Brave budget estimate** before each run. The admin dashboard's **API Budgets panel** reads `api_usage` via the `admin-usage` edge function: "≈N artists enrichable this month" (remaining Brave ÷ 3 calls/artist), monthly Brave bar (accent → white ≥70% → white-on-negative ≥90%), and per-vendor calls-today tiles. Keep the panel's constants in `src/components/admin/ApiBudgets.tsx` in sync with `BUDGETS` in `rate-limit.ts`.
 
@@ -209,7 +218,7 @@ At ingest time: bios containing the festival brand name are flagged with a SQL c
 ### Env vars needed
 
 ```
-BRAVE_API_KEY=...            # Brave Search API key (free, 2000 queries/month)
+BRAVE_API_KEY=...            # Brave Search API key (free, 1000 queries/month)
 DISCOGS_CONSUMER_KEY=...     # Discogs consumer key (free)
 DISCOGS_CONSUMER_SECRET=...  # Discogs consumer secret (free)
 CLOUDFLARE_ACCOUNT_ID=...    # Cloudflare account ID — enables image scoring via Workers AI
