@@ -2,7 +2,7 @@ import { Heading } from '../ui/Heading'
 import { useAdminApiUsage, type ApiUsageRow } from '../../hooks/useAdminApiUsage'
 
 // Mirrors BUDGETS in scripts/lib/enrichment/rate-limit.ts
-const BRAVE_MONTHLY_QUOTA = 2000
+const BRAVE_MONTHLY_QUOTA = 1000
 const BRAVE_CALLS_PER_ARTIST = 3 // SC search + IG search + bio search (full run)
 
 const RATE_VENDORS = [

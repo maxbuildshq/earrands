@@ -17,7 +17,7 @@ const MIN_INTERVAL_MS: Record<Vendor, number> = {
 }
 
 export const BUDGETS = {
-  brave: { monthly: Number(process.env.BRAVE_MONTHLY_QUOTA ?? 2000) },
+  brave: { monthly: Number(process.env.BRAVE_MONTHLY_QUOTA ?? 1000) },
   // Assumed Brave calls per artist on a full run (SC search + IG search + bio search)
   braveCallsPerArtist: 3,
 } as const

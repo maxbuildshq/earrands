@@ -165,7 +165,7 @@ Opt-in entity-resolution mode; default stays `legacy` (behavior unchanged). Adds
 
 ### Rate limits & usage accounting
 
-Brave Search: **2,000 queries/month** free tier (override via `BRAVE_MONTHLY_QUOTA`). Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. MusicBrainz: 1 req/sec + User-Agent. Bio research: 1 Brave query per artist (counts against monthly quota).
+Brave Search: **1,000 queries/month** free tier (override via `BRAVE_MONTHLY_QUOTA`). Discogs: 60 req/min. SoundCloud scrape/oEmbed: ~1 req/sec. MusicBrainz: 1 req/sec + User-Agent. Bio research: 1 Brave query per artist (counts against monthly quota).
 
 Every outbound client records real API consumption via `rate-limit.ts` (`recordUsage`, dry runs included — the calls happened); `enrich-artists.ts` flushes counts to the `api_usage` table (migration 037, service-role-only `increment_api_usage` RPC) and prints a **preflight Brave budget estimate** before each run. The admin dashboard's **API Budgets panel** reads `api_usage` via the `admin-usage` edge function: "≈N artists enrichable this month" (remaining Brave ÷ 3 calls/artist), monthly Brave bar (accent → white ≥70% → white-on-negative ≥90%), and per-vendor calls-today tiles. Keep the panel's constants in `src/components/admin/ApiBudgets.tsx` in sync with `BUDGETS` in `rate-limit.ts`.
 
@@ -218,7 +218,7 @@ At ingest time: bios containing the festival brand name are flagged with a SQL c
 ### Env vars needed
 
 ```
-BRAVE_API_KEY=...            # Brave Search API key (free, 2000 queries/month)
+BRAVE_API_KEY=...            # Brave Search API key (free, 1000 queries/month)
 DISCOGS_CONSUMER_KEY=...     # Discogs consumer key (free)
 DISCOGS_CONSUMER_SECRET=...  # Discogs consumer secret (free)
 CLOUDFLARE_ACCOUNT_ID=...    # Cloudflare account ID — enables image scoring via Workers AI
