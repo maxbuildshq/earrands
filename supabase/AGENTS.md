@@ -37,6 +37,7 @@ festival_requests  id, user_id, raw_name, region (nullable), notified_at (nullab
 - `029_welcome_email.sql` — `welcome_emails` dedup table (RLS on, no policies — service-role only) + pg_net trigger on `auth.users` that calls the `welcome-email` edge function on email confirmation. Needs a vault secret `welcome_email_secret` matching the edge function's `WELCOME_EMAIL_SECRET`; function also needs `RESEND_API_KEY` and `NOTIFY_FROM_EMAIL` secrets.
 - `036_image_candidates.sql` — adds `image_candidates jsonb` (full tagged candidate set) and `enrichment_confidence jsonb` (per-field `{ level, evidence[] }`, ADR 011) to `artists`; both nullable/additive
 - `037_api_usage.sql` — `api_usage` counter table (vendor, day, count; RLS on, no policies — service-role only) + security-definer `increment_api_usage(v, n)` RPC; written by enrichment scripts, read by the admin-usage edge function for the dashboard API-budgets panel
+- `038_parse_suggestions.sql` — `parse_suggestions` table (Phase 2b parsing arbiter; RLS on, no policies — service-role only): LLM-proposed parse corrections per `(festival_id, raw_name)` with confidence + pending/accepted/dismissed status; written by `parse-artists --arbiter`, reviewed via the admin-festivals edge function, applied to `set_artists` by the next arbiter run
 
 ## RLS Summary
 

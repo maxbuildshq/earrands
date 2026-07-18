@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateSql } from './ingest-diff.js'
+import { computeFlags, generateSql } from './ingest-diff.js'
 import type { ScrapedData } from '../scrapers/types.js'
 import type { SetDiff } from './ingest-diff.js'
 
@@ -28,6 +28,23 @@ function makeScrapedData(overrides: Partial<ScrapedData> = {}): ScrapedData {
     ...overrides,
   }
 }
+
+describe('computeFlags — extraction warnings', () => {
+  it('surfaces scraper extraction_warnings as warn flags in the diff preview', () => {
+    const scraped = makeScrapedData({
+      extraction_warnings: ['2026-08-02 RADAR: times from vision fallback (pixel gridlines not fully detected) — verify against the poster'],
+    })
+    const flags = computeFlags(scraped, emptySetDiff)
+    expect(flags).toContainEqual({
+      level: 'warn',
+      message: '2026-08-02 RADAR: times from vision fallback (pixel gridlines not fully detected) — verify against the poster',
+    })
+  })
+
+  it('adds no flags when extraction_warnings is absent', () => {
+    expect(computeFlags(makeScrapedData(), emptySetDiff)).toEqual([])
+  })
+})
 
 describe('generateSql', () => {
   it('writes bio_festival alongside bio on insert and preserves it via ON CONFLICT', () => {

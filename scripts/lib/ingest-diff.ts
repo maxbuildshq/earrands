@@ -271,6 +271,13 @@ export function computeDiff(scraped: ScrapedData, current: DbState): DiffResult 
 export function computeFlags(scraped: ScrapedData, setDiff: SetDiff): Flag[] {
   const flags: Flag[] = []
 
+  // Scraper-reported extraction-quality warnings (e.g. poster columns on
+  // vision-fallback times) — the diff preview is the review gate, so these
+  // must reach it, not just the scrape logs.
+  for (const w of scraped.extraction_warnings ?? []) {
+    flags.push({ level: 'warn', message: w })
+  }
+
   for (const r of setDiff.rescheduled) {
     const parts: string[] = []
     if (r.existing.day !== r.scraped.day) parts.push(`${r.existing.day} → ${r.scraped.day}`)

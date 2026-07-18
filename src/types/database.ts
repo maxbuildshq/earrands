@@ -170,3 +170,17 @@ export type EnrichmentJob = {
   result_summary: Record<string, unknown> | null
   error: string | null
 }
+
+export type ParseSuggestion = {
+  id: string
+  festival_id: string
+  raw_name: string
+  current_parse: { collective: string | null; members: string[]; role: string }
+  suggested: { collective: string | null; members: string[] }
+  confidence: 'high' | 'medium' | 'low'
+  reason: string
+  detector_reasons: string[]
+  status: 'pending' | 'accepted' | 'dismissed'
+  created_at: string
+  reviewed_at: string | null
+}

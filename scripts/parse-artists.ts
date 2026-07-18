@@ -10,12 +10,18 @@
  *   npm run parse-artists                               # all festivals
  *   npm run parse-artists -- --festival=verknipt-2026  # one festival
  *   npm run parse-artists -- --dry-run                 # preview, no writes
+ *   npm run parse-artists -- --festival=<slug> --arbiter
+ *       # also run the parsing arbiter: detect novel/unclean parses, get LLM
+ *       # suggestions (local claude CLI), persist as pending for admin review;
+ *       # previously accepted suggestions override the rule parse
  *
  * Requires SUPABASE_SERVICE_ROLE_KEY in .env.local (service role bypasses RLS).
  * Get it from: Supabase dashboard → Project Settings → API → service_role → Reveal
  */
 import { createClient } from '@supabase/supabase-js'
-import { parseArtistName, type Role } from './lib/artist-parser.js'
+import { parseArtistName, type ParseResult, type Role } from './lib/artist-parser.js'
+import { detectBatch } from './lib/parse-detector.js'
+import { runArbiter } from './lib/arbiter.js'
 
 export { parseArtistName }
 
@@ -24,6 +30,12 @@ export { parseArtistName }
 const args = process.argv.slice(2)
 const festivalSlug = args.find(a => a.startsWith('--festival='))?.split('=')[1]
 const dryRun = args.includes('--dry-run')
+const arbiter = args.includes('--arbiter')
+
+if (arbiter && !festivalSlug) {
+  console.error('❌ --arbiter requires --festival=<slug> (suggestions are festival-scoped)')
+  process.exit(1)
+}
 
 console.log('🎵 earrands — Artist Parser')
 console.log('──────────────────────────────────')
@@ -80,6 +92,25 @@ async function main() {
 
   console.log(`📋 ${sets.length} sets to process`)
 
+  // ── Arbiter: accepted suggestions override the rule parse ──────────────────
+  const overrides = new Map<string, ParseResult>()
+  if (arbiter) {
+    const { data: accepted } = await supabase
+      .from('parse_suggestions')
+      .select('raw_name, suggested')
+      .eq('festival_id', festivalId!)
+      .eq('status', 'accepted')
+    for (const row of accepted ?? []) {
+      const s = row.suggested as { collective: string | null; members: string[] }
+      overrides.set(row.raw_name, {
+        collective: s.collective,
+        members: s.members,
+        role: s.collective ? 'member' : s.members.length > 1 ? 'collab' : 'solo',
+      })
+    }
+    if (overrides.size > 0) console.log(`🧑‍⚖️ ${overrides.size} accepted arbiter override(s) in effect`)
+  }
+
   // Parse all sets → collect unique artists + links
   type ArtistEntry = { name: string; sort_name: string; is_collective: boolean }
   type LinkEntry = { set_id: string; sort_name: string; role: Role; billing_order: number }
@@ -88,7 +119,7 @@ async function main() {
   const links: LinkEntry[] = []
 
   for (const set of sets) {
-    const { collective, members, role } = parseArtistName(set.artist_name)
+    const { collective, members, role } = overrides.get(set.artist_name) ?? parseArtistName(set.artist_name)
 
     if (collective) {
       const sortName = collective.toLowerCase().trim()
@@ -127,6 +158,55 @@ async function main() {
       console.log(`   "${set.artist_name}" → ${parts.join(` ‹${result.role}› `)}`)
     }
   })
+
+  // ── Arbiter: detect novel/unclean parses → LLM suggestions for review ──────
+  if (arbiter) {
+    const uniqueRaws = [...new Set(sets.map(s => s.artist_name))]
+      .filter(raw => !overrides.has(raw))
+    const { data: knownRows } = await supabase.from('artists').select('sort_name')
+    const known = new Set((knownRows ?? []).map(r => r.sort_name as string))
+    // Structural signals only: on a fresh festival every artist is "unknown",
+    // so unknown-membership alone would flag the entire lineup.
+    const flagged = detectBatch(
+      uniqueRaws.map(raw => ({ raw, parsed: parseArtistName(raw) })),
+      known,
+      { unknownAlone: false },
+    )
+
+    // Don't re-arbitrate names that already have a suggestion (any status —
+    // a dismissed suggestion stays dismissed).
+    const { data: existing } = await supabase
+      .from('parse_suggestions')
+      .select('raw_name')
+      .eq('festival_id', festivalId!)
+    const seen = new Set((existing ?? []).map(r => r.raw_name as string))
+    const fresh = flagged.filter(f => !seen.has(f.raw))
+
+    console.log(`\n🧑‍⚖️ Arbiter: ${flagged.length} suspicious parse(s), ${fresh.length} new`)
+    for (const f of fresh) console.log(`   "${f.raw}" — ${f.reasons.join('; ')}`)
+
+    if (fresh.length > 0 && !dryRun) {
+      const { data: artistNames } = await supabase.from('artists').select('name').order('sort_name')
+      const suggestions = runArbiter(fresh, (artistNames ?? []).map(r => r.name as string))
+      const byRaw = new Map(fresh.map(f => [f.raw, f]))
+      const rows = suggestions.map(s => ({
+        festival_id: festivalId!,
+        raw_name: s.raw,
+        current_parse: byRaw.get(s.raw)!.parsed,
+        suggested: { collective: s.collective, members: s.members },
+        confidence: s.confidence,
+        reason: s.reason,
+        detector_reasons: byRaw.get(s.raw)!.reasons,
+      }))
+      const { error: sugError } = await supabase
+        .from('parse_suggestions')
+        .upsert(rows, { onConflict: 'festival_id,raw_name', ignoreDuplicates: true })
+      if (sugError) console.error(`   ❌ failed to write suggestions: ${sugError.message}`)
+      else console.log(`   💾 ${rows.length} suggestion(s) written for admin review`)
+    } else if (fresh.length > 0) {
+      console.log('   (dry run — no LLM call, no suggestions written)')
+    }
+  }
 
   if (dryRun) {
     console.log('\n✅ Dry run complete — run without --dry-run to write to DB')
