@@ -34,6 +34,10 @@ export type ScrapedData = {
   stages: ScrapedStage[]
   sets: ScrapedSet[]
   artists: ScrapedArtist[]
+  // Extraction-quality warnings from the scraper (e.g. poster columns whose
+  // times came from a less precise fallback). Surfaced as `warn` flags in the
+  // diff preview so they reach the human review gate, not just scrape logs.
+  extraction_warnings?: string[]
 }
 
 export type ScraperAdapter = (url: string) => Promise<ScrapedData>

@@ -309,6 +309,7 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
   const stages: ScrapedStage[] = []
   const stageNames = new Set<string>()
   const sets: ScrapedSet[] = []
+  const extractionWarnings: string[] = []
 
   for (const { day, src } of dayImages) {
     console.log(`  ${day}: downloading poster...`)
@@ -320,7 +321,10 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
     console.log(`  ${day}: extracting (calibrated vision)...`)
     const result = await extractPosterDayVision(imgPath, { day, workDir: join(posterDir, 'vision') })
     if (!result) { console.warn(`  ! geometry failed for ${day}`); continue }
-    if (result.failedStrips.length > 0) console.warn(`  ! failed strips on ${day}: ${result.failedStrips.join(', ')}`)
+    if (result.failedStrips.length > 0) {
+      console.warn(`  ! failed strips on ${day}: ${result.failedStrips.join(', ')}`)
+      extractionWarnings.push(`${day} ${result.failedStrips.join(', ')}: times from vision fallback (pixel gridlines not fully detected) — verify against the poster`)
+    }
 
     for (const s of result.sets) {
       const match = matchCanonical(s.artist_name, canonical)
@@ -350,5 +354,6 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
     stages,
     sets,
     artists: nuxtResult.artists, // bios/source_urls straight from Nuxt
+    ...(extractionWarnings.length > 0 && { extraction_warnings: extractionWarnings }),
   }
 }
