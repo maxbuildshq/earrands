@@ -1,6 +1,6 @@
 import type { ScraperAdapter } from './types.js'
 import { scrapeAwakenings } from './awakenings.js'
-import { scrapeDekmantel } from './dekmantel.js'
+import { scrapeDekmantelHybrid } from './dekmantel.js'
 
 type AdapterEntry = {
   pattern: RegExp
@@ -10,7 +10,7 @@ type AdapterEntry = {
 
 const adapters: AdapterEntry[] = [
   { pattern: /awakenings\.com/, adapter: scrapeAwakenings, name: 'Awakenings' },
-  { pattern: /dekmantelfestival\.com/, adapter: scrapeDekmantel, name: 'Dekmantel' },
+  { pattern: /dekmantelfestival\.com/, adapter: scrapeDekmantelHybrid, name: 'Dekmantel (poster hybrid)' },
 ]
 
 export function findAdapter(url: string): AdapterEntry | null {

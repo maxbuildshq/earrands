@@ -1,5 +1,8 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { ScrapedData, ScrapedSet, ScrapedStage, ScrapedArtist } from './types.js'
-import { fetchNuxtData, generateSlug } from './base.js'
+import { fetchNuxtData, getBrowser, generateSlug } from './base.js'
+import { extractPosterDayVision } from '../lib/extract/poster-vision.js'
 
 export type NuxtTimeslot = {
   slug: string
@@ -179,4 +182,173 @@ export async function scrapeDekmantel(url: string): Promise<ScrapedData> {
   console.log(`Artists with bios: ${artists.filter(a => a.bio).length}/${artists.length}`)
 
   return { festival, stages, sets, artists }
+}
+
+// ── Poster hybrid mode ────────────────────────────────────────────────────────
+// Dekmantel's Nuxt payload is authoritative for names/bios/socials but NOT for
+// times: the designed poster PNGs are the real schedule, and the CMS timeslots
+// are half-maintained (00:00–23:00 placeholders survive for months). Hybrid:
+// poster = time/stage authority (pixel-measured), Nuxt = spelling/bio authority.
+
+export type DayImage = { day: string; src: string }
+
+/** Click through the timetable day tabs and collect each day's full-res image URL. */
+export async function discoverTimetableImages(url: string, startDate: string, endDate: string): Promise<DayImage[]> {
+  const browser = await getBrowser()
+  const page = await browser.newPage()
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
+
+    const tabs = page.locator('button, a, [role="tab"]')
+      .filter({ hasText: /(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s*\d{1,2}/i })
+    const count = await tabs.count()
+    const images: DayImage[] = []
+    const seen = new Set<string>()
+
+    for (let i = 0; i < count; i++) {
+      const label = (await tabs.nth(i).innerText()).trim()
+      const dayOfMonth = parseInt(label.match(/(\d{1,2})/)?.[1] ?? '', 10)
+      if (isNaN(dayOfMonth)) continue
+
+      await tabs.nth(i).click()
+      await page.waitForTimeout(1500)
+      const src = await page.locator('.timetable__image-wrapper img, .timetable img').first()
+        .evaluate((img: HTMLImageElement) => img.currentSrc || img.src)
+        .catch(() => null)
+      if (!src || seen.has(src)) continue
+      seen.add(src)
+
+      const day = resolveDayDate(dayOfMonth, startDate, endDate)
+      if (day) images.push({ day, src })
+    }
+    return images
+  } finally {
+    await page.close()
+  }
+}
+
+/** Map a day-of-month from a tab label to a full date within the festival range. */
+export function resolveDayDate(dayOfMonth: number, startDate: string, endDate: string): string | null {
+  const start = new Date(`${startDate}T12:00:00`)
+  const end = new Date(`${endDate}T12:00:00`)
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    if (d.getDate() === dayOfMonth) return d.toISOString().split('T')[0]
+  }
+  return null
+}
+
+function normalizeName(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+export type CanonicalName = { name: string; isLive: boolean }
+
+/** Levenshtein edit distance between two strings. */
+export function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length
+  const d = new Array(n + 1)
+  for (let j = 0; j <= n; j++) d[j] = j
+  for (let i = 1; i <= m; i++) {
+    let prev = d[0]
+    d[0] = i
+    for (let j = 1; j <= n; j++) {
+      const tmp = d[j]
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
+      prev = tmp
+    }
+  }
+  return d[n]
+}
+
+/**
+ * Resolve a poster-read artist name to its authoritative Nuxt spelling: exact
+ * normalized match first, then a conservative fuzzy fallback for OCR slips in
+ * stylized fonts (e.g. "MESKA"→"Neska", "KOMDUKU"→"Konduku"). The fuzzy match
+ * only fires on a single unambiguous nearest name within a tight edit-distance
+ * budget (≤2 chars, ≤15% of length); ties or larger gaps keep the poster text
+ * and surface in the diff review.
+ */
+export function matchCanonical(name: string, canonical: Map<string, CanonicalName>): CanonicalName | undefined {
+  const norm = normalizeName(name)
+  const exact = canonical.get(norm)
+  if (exact) return exact
+
+  let best: CanonicalName | undefined, bestKey = '', bestD = Infinity, tie = false
+  for (const [key, val] of canonical) {
+    const d = levenshtein(norm, key)
+    if (d < bestD) { bestD = d; best = val; bestKey = key; tie = false }
+    else if (d === bestD) tie = true
+  }
+  if (!best || tie) return undefined
+  const budget = Math.min(2, Math.max(1, Math.floor(Math.max(norm.length, bestKey.length) * 0.15)))
+  return bestD <= budget ? best : undefined
+}
+
+export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
+  // Nuxt pass — names, bios, festival dates (existing extraction, unchanged)
+  const nuxtResult = await scrapeDekmantel(url)
+
+  // canonical-casing + live-status lookup from Nuxt set names (authoritative spelling)
+  const canonical = new Map<string, CanonicalName>()
+  for (const s of nuxtResult.sets) {
+    canonical.set(normalizeName(s.artist_name), { name: s.artist_name, isLive: s.is_live })
+  }
+
+  console.log('Discovering timetable poster images...')
+  const dayImages = await discoverTimetableImages(url, nuxtResult.festival.start_date, nuxtResult.festival.end_date)
+  if (dayImages.length === 0) {
+    console.warn('No poster images found — falling back to Nuxt times')
+    return nuxtResult
+  }
+  console.log(`Found ${dayImages.length} day poster(s)`)
+
+  const posterDir = 'scraped/posters'
+  mkdirSync(posterDir, { recursive: true })
+
+  const stages: ScrapedStage[] = []
+  const stageNames = new Set<string>()
+  const sets: ScrapedSet[] = []
+
+  for (const { day, src } of dayImages) {
+    console.log(`  ${day}: downloading poster...`)
+    const res = await fetch(src)
+    if (!res.ok) { console.warn(`  ! HTTP ${res.status} for ${src}`); continue }
+    const imgPath = join(posterDir, `dekmantel-${day}.png`)
+    writeFileSync(imgPath, Buffer.from(await res.arrayBuffer()))
+
+    console.log(`  ${day}: extracting (calibrated vision)...`)
+    const result = await extractPosterDayVision(imgPath, { day, workDir: join(posterDir, 'vision') })
+    if (!result) { console.warn(`  ! geometry failed for ${day}`); continue }
+    if (result.failedStrips.length > 0) console.warn(`  ! failed strips on ${day}: ${result.failedStrips.join(', ')}`)
+
+    for (const s of result.sets) {
+      const match = matchCanonical(s.artist_name, canonical)
+      if (match && normalizeName(match.name) !== normalizeName(s.artist_name)) {
+        console.log(`    ~ name: "${s.artist_name}" → "${match.name}" (matched Nuxt spelling)`)
+      }
+      if (s.stage && !stageNames.has(s.stage)) {
+        stageNames.add(s.stage)
+        stages.push({ name: s.stage, sort_order: stages.length + 1 })
+      }
+      sets.push({
+        ...s,
+        artist_name: match?.name ?? s.artist_name, // Nuxt casing/spelling wins when the artist matches
+        is_live: s.is_live || (match?.isLive ?? false),
+      })
+    }
+    console.log(`  ${day}: ${result.sets.length} sets`)
+  }
+
+  if (sets.length === 0) {
+    console.warn('Poster extraction produced no sets — falling back to Nuxt times')
+    return nuxtResult
+  }
+
+  return {
+    festival: nuxtResult.festival,
+    stages,
+    sets,
+    artists: nuxtResult.artists, // bios/source_urls straight from Nuxt
+  }
 }
