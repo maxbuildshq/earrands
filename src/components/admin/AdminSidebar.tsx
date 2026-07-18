@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/admin/requests', label: 'Reqs' },
   { to: '/admin/notifications', label: 'Notify' },
   { to: '/admin/jobs', label: 'Jobs' },
+  { to: '/admin/pipeline', label: 'Pipe' },
 ] as const
 
 const BASE = 'block px-3 py-2 font-mono text-sm uppercase tracking-wider transition-colors'

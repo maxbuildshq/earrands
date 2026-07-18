@@ -75,6 +75,40 @@ Deno.serve(async (req) => {
       return json(stats)
     }
 
+    // Pipeline step counters for one festival (Phase 3 — AdminPipeline page).
+    // Pure read-side glue over existing tables; no state of its own.
+    if (action === 'pipeline') {
+      const festivalId = url.searchParams.get('festival_id')
+      if (!festivalId) return json({ error: 'Missing festival_id' }, 400)
+
+      const [sets, linkedSets, artistLinks, suggestions, follows, notified] = await Promise.all([
+        supabase.from('sets').select('id', { count: 'exact', head: true }).eq('festival_id', festivalId),
+        supabase.from('set_artists').select('set_id, sets!inner(festival_id)').eq('sets.festival_id', festivalId),
+        supabase.from('set_artists').select('artist_id, artists!inner(enriched_at, enrichment_status), sets!inner(festival_id)').eq('sets.festival_id', festivalId),
+        supabase.from('parse_suggestions').select('id', { count: 'exact', head: true }).eq('festival_id', festivalId).eq('status', 'pending'),
+        supabase.from('festival_follows').select('id', { count: 'exact', head: true }).eq('festival_id', festivalId),
+        supabase.from('festival_follows').select('id', { count: 'exact', head: true }).eq('festival_id', festivalId).not('notified_at', 'is', null),
+      ])
+
+      const uniqueLinkedSets = new Set((linkedSets.data ?? []).map((r: { set_id: string }) => r.set_id))
+      const artistById = new Map<string, { enriched_at: string | null; enrichment_status: string }>()
+      for (const r of (artistLinks.data ?? []) as unknown as { artist_id: string; artists: { enriched_at: string | null; enrichment_status: string } }[]) {
+        artistById.set(r.artist_id, r.artists)
+      }
+      const artistRows = [...artistById.values()]
+
+      return json({
+        sets: sets.count ?? 0,
+        sets_with_artists: uniqueLinkedSets.size,
+        artists: artistById.size,
+        artists_enriched: artistRows.filter(a => a.enriched_at !== null).length,
+        artists_reviewed: artistRows.filter(a => a.enrichment_status === 'reviewed').length,
+        suggestions_pending: suggestions.count ?? 0,
+        followers: follows.count ?? 0,
+        followers_notified: notified.count ?? 0,
+      })
+    }
+
     // Parsing-arbiter suggestions for one festival (Phase 2b — review in AdminSets)
     if (action === 'parse_suggestions') {
       const festivalId = url.searchParams.get('festival_id')

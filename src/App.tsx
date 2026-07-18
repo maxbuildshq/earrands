@@ -23,6 +23,7 @@ const AdminEnrichmentReview = lazy(() => import('./pages/admin/AdminEnrichmentRe
 const AdminRequests = lazy(() => import('./pages/admin/AdminRequests'))
 const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'))
 const AdminJobs = lazy(() => import('./pages/admin/AdminJobs'))
+const AdminPipeline = lazy(() => import('./pages/admin/AdminPipeline'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -68,6 +69,7 @@ function App() {
               <Route path="requests" element={<AdminRequests />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="jobs" element={<AdminJobs />} />
+              <Route path="pipeline" element={<AdminPipeline />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

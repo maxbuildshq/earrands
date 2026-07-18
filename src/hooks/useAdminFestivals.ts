@@ -137,3 +137,26 @@ export function useReviewSuggestion() {
     },
   })
 }
+
+export type PipelineCounters = {
+  sets: number
+  sets_with_artists: number
+  artists: number
+  artists_enriched: number
+  artists_reviewed: number
+  suggestions_pending: number
+  followers: number
+  followers_notified: number
+}
+
+export function usePipelineCounters(festivalId: string | undefined) {
+  return useQuery<PipelineCounters>({
+    queryKey: ['admin', 'pipeline', festivalId],
+    queryFn: () => adminFetch<PipelineCounters>('admin-festivals', {
+      params: { action: 'pipeline', festival_id: festivalId! },
+    }),
+    enabled: !!festivalId,
+    staleTime: 15_000,
+    refetchInterval: 30_000, // live counters while jobs run
+  })
+}
