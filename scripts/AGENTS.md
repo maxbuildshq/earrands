@@ -69,6 +69,19 @@ Pre-extracted JSON still works directly:
 npm run ingest -- --json=scraped/some-festival.json
 ```
 
+## Poster/Image Timetable Extraction
+
+Some festivals (Dekmantel) publish the timetable only as designed poster PNGs, not structured data — no DOM/CMS payload to extract times from. `scripts/lib/extract/poster-vision.ts` reads these via a calibrated, per-column vision pass: **pixels decide WHERE the grid is, vision reads WHAT's in it.**
+
+1. `prepareWorkImage()` downscales the poster to `MAX_DIM = 2000px` long edge before any vision call — this matches (with margin) the resolution Claude's image input downscales to internally, so every pixel coordinate reported by vision and computed by the pipeline lives in one consistent space.
+2. One vision call reads geometry only: grid top/bottom hour-line Y, first/last hour, axis span, grid outer x-span, ordered column (stage) names — no per-column boundaries, no names yet.
+3. `columnBounds()` divides the grid into N equal-width columns from the ordered name list (no vision call) — poster grids use uniform column width, so an even division never clips text. (Asking vision for each column's own x-fraction was tried first and was unreliable on interior boundaries — it clipped/duplicated columns.)
+4. Per stage, `sliceColumns()` cuts a full-height `[hour-axis | column]` strip; `detectBoundaries()` finds full-width dark gridlines contrast-relative to that strip's own background (works across near-black to near-white posters), and `boundaryTimes()` snaps them to the 15-minute grid — this pixel-derived time is always used over vision's own time estimate, since vision systematically rounds sub-hour boundaries toward the heavier whole-hour gridlines.
+5. One vision call per stage reads that column's set blocks (artist name + live-flag + approximate top/bottom Y). `alignByOverlap()` (DP) assigns each block to the pixel-detected time slot it overlaps most — not the slot with the closest *start* — so an hour-biased vision estimate next to an empty gap can't steal a name into the wrong slot. Returns `null` (strip flagged, vision-only times used as fallback) when there are more names than detected slots — happens on very densely packed columns where gridlines are too faint/close to detect (e.g. Dekmantel Radar: nine ~1h back-to-back sets).
+6. `matchCanonical()` in the adapter (Dekmantel: `scripts/scrapers/dekmantel.ts`) Levenshtein-corrects poster-read names against the authoritative Nuxt lineup spelling — poster is the time authority, Nuxt/CMS is the name+bio authority.
+
+Verified on Dekmantel 2026-08-02 (39/39 sets, 6/7 stages exact-precision) and 2026-07-30 (all correct). Cost: 1 calibration call + 1 call per stage column, local `claude` CLI.
+
 ## Adding a Festival (manual fallback)
 
 1. Write `supabase/migrations/00X_festivalname.sql` — insert festival, stages, sets
@@ -97,7 +110,7 @@ Each adapter: `(url: string) => Promise<ScrapedData>` in `scripts/scrapers/`. Re
 
 Current adapters:
 - **Awakenings** (`awakenings.com`) — all Awakenings events (Upclose, Festival, ADE, Easter, Monegros)
-- **Dekmantel** (`dekmantelfestival.com`) — extracts `__NUXT__` payload via Playwright; maps ITC venues and Bos day/dawn to stages
+- **Dekmantel** (`dekmantelfestival.com`) — extracts `__NUXT__` payload via Playwright for names/bios/stages; timetable is a poster PNG per day, not in the payload — times come from poster-vision extraction (above), merged onto Nuxt names by fuzzy match
 
 ### Adding a new adapter
 

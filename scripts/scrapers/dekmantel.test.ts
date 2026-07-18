@@ -1,5 +1,57 @@
 import { describe, it, expect } from 'vitest'
-import { parseIsoTime, extractLiveStatus, getStageName, type NuxtTimeslot } from './dekmantel.js'
+import { parseIsoTime, extractLiveStatus, getStageName, resolveDayDate, levenshtein, matchCanonical, type CanonicalName, type NuxtTimeslot } from './dekmantel.js'
+
+describe('levenshtein', () => {
+  it('counts single-character substitutions', () => {
+    expect(levenshtein('meska', 'neska')).toBe(1)
+    expect(levenshtein('komduku', 'konduku')).toBe(1)
+  })
+  it('is zero for identical strings and full for disjoint', () => {
+    expect(levenshtein('abc', 'abc')).toBe(0)
+    expect(levenshtein('abc', 'xyz')).toBe(3)
+  })
+})
+
+describe('matchCanonical', () => {
+  const canon = new Map<string, CanonicalName>([
+    ['neska', { name: 'Neska', isLive: false }],
+    ['konduku', { name: 'Konduku', isLive: false }],
+    ['dvs1', { name: 'DVS1', isLive: false }],
+    ['dax j', { name: 'Dax J', isLive: false }],
+  ])
+  it('returns the exact match (canonical casing)', () => {
+    expect(matchCanonical('NESKA', canon)?.name).toBe('Neska')
+  })
+  it('corrects a one-char OCR slip to the Nuxt spelling', () => {
+    expect(matchCanonical('MESKA', canon)?.name).toBe('Neska')
+    expect(matchCanonical('KOMDUKU', canon)?.name).toBe('Konduku')
+  })
+  it('keeps the poster name when nothing is close enough', () => {
+    expect(matchCanonical('Some Unknown Act', canon)).toBeUndefined()
+  })
+  it('does not over-correct a genuinely different short name', () => {
+    // "Max J" is 1 edit from "Dax J" but also plausibly a distinct act — allowed only
+    // because it is the single nearest within budget; a real ambiguity (tie) is skipped
+    const ambiguous = new Map<string, CanonicalName>([
+      ['dax j', { name: 'Dax J', isLive: false }],
+      ['max k', { name: 'Max K', isLive: false }],
+    ])
+    expect(matchCanonical('max j', ambiguous)).toBeUndefined() // ties at distance 1 → skip
+  })
+})
+
+describe('resolveDayDate', () => {
+  it('maps a day-of-month to a date within the festival range', () => {
+    expect(resolveDayDate(30, '2026-07-29', '2026-08-02')).toBe('2026-07-30')
+  })
+  it('handles cross-month ranges (tab "01" = August 1st)', () => {
+    expect(resolveDayDate(1, '2026-07-29', '2026-08-02')).toBe('2026-08-01')
+    expect(resolveDayDate(2, '2026-07-29', '2026-08-02')).toBe('2026-08-02')
+  })
+  it('returns null for a day outside the range', () => {
+    expect(resolveDayDate(15, '2026-07-29', '2026-08-02')).toBeNull()
+  })
+})
 
 describe('parseIsoTime', () => {
   it('parses ISO timestamp to day and time', () => {
