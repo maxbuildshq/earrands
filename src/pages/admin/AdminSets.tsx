@@ -3,6 +3,7 @@ import { Heading } from '../../components/ui/Heading'
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
 import { useSets, useStages } from '../../hooks/useFestivalData'
 import { SetArtistCompare } from '../../components/admin/SetArtistCompare'
+import { ParseSuggestions } from '../../components/admin/ParseSuggestions'
 
 export default function AdminSets() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -43,8 +44,11 @@ export default function AdminSets() {
       ) : isLoading ? (
         <p className="font-mono text-sm text-text-secondary">Loading...</p>
       ) : (
-        <div className="flex-1 min-h-0">
-          <SetArtistCompare sets={sets} stages={stages} fill />
+        <div className="flex-1 min-h-0 flex flex-col gap-4">
+          <ParseSuggestions festivalId={festivalId} />
+          <div className="flex-1 min-h-0">
+            <SetArtistCompare sets={sets} stages={stages} fill />
+          </div>
         </div>
       )}
     </div>

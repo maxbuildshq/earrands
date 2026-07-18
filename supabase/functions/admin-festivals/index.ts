@@ -75,6 +75,19 @@ Deno.serve(async (req) => {
       return json(stats)
     }
 
+    // Parsing-arbiter suggestions for one festival (Phase 2b — review in AdminSets)
+    if (action === 'parse_suggestions') {
+      const festivalId = url.searchParams.get('festival_id')
+      if (!festivalId) return json({ error: 'Missing festival_id' }, 400)
+      const { data, error } = await supabase
+        .from('parse_suggestions')
+        .select('*')
+        .eq('festival_id', festivalId)
+        .order('created_at', { ascending: true })
+      if (error) return json({ error: error.message }, 500)
+      return json(data)
+    }
+
     return json({ error: 'Unknown action' }, 400)
   }
 
@@ -161,6 +174,25 @@ Deno.serve(async (req) => {
         .from('sets')
         .update(filtered)
         .eq('id', set_id)
+        .select()
+        .single()
+      if (error) return json({ error: error.message }, 500)
+      return json(data)
+    }
+
+    // Accept/dismiss a parsing-arbiter suggestion (status flip only — the
+    // accepted parse is applied by the next `parse-artists --arbiter` run)
+    if (action === 'review_suggestion') {
+      const { suggestion_id, status } = body
+      if (!suggestion_id) return json({ error: 'Missing suggestion_id' }, 400)
+      if (status !== 'accepted' && status !== 'dismissed' && status !== 'pending') {
+        return json({ error: 'status must be accepted, dismissed, or pending' }, 400)
+      }
+
+      const { data, error } = await supabase
+        .from('parse_suggestions')
+        .update({ status, reviewed_at: status === 'pending' ? null : new Date().toISOString() })
+        .eq('id', suggestion_id)
         .select()
         .single()
       if (error) return json({ error: error.message }, 500)

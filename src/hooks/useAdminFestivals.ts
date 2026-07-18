@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { adminFetch } from '../lib/admin'
-import type { Festival } from '../types/database'
+import type { Festival, ParseSuggestion } from '../types/database'
 
 export function useAdminFestivals() {
   return useQuery<Festival[]>({
@@ -112,6 +112,28 @@ export function useToggleFestivalField() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'festivals'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'festival'] })
+    },
+  })
+}
+
+export function useParseSuggestions(festivalId: string | undefined) {
+  return useQuery<ParseSuggestion[]>({
+    queryKey: ['admin', 'parse-suggestions', festivalId],
+    queryFn: () => adminFetch<ParseSuggestion[]>('admin-festivals', {
+      params: { action: 'parse_suggestions', festival_id: festivalId! },
+    }),
+    enabled: !!festivalId,
+    staleTime: 30_000,
+  })
+}
+
+export function useReviewSuggestion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ suggestionId, status }: { suggestionId: string; status: ParseSuggestion['status'] }) =>
+      adminFetch('admin-festivals', { method: 'POST', body: { action: 'review_suggestion', suggestion_id: suggestionId, status } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'parse-suggestions'] })
     },
   })
 }

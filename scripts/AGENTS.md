@@ -18,6 +18,7 @@ npm run ingest -- --url=<url> --extract=llm            # force LLM extraction (s
 npm run parse-artists                                  # re-parse all artists globally
 npm run parse-artists -- --festival=<slug>             # one festival only
 npm run parse-artists -- --dry-run                     # preview, no DB writes
+npm run parse-artists -- --festival=<slug> --arbiter   # + parsing arbiter: detect novel parses, LLM suggestions for admin review
 
 # Notifications
 npm run notify -- --festival=<slug>                    # email timetable-drop followers
@@ -131,6 +132,18 @@ See `docs/decisions/005` for how the frontend displays these.
 ## Artist Normalization
 
 Parsing in `scripts/lib/artist-parser.ts` (shared by `ingest.ts` and `parse-artists.ts`).
+
+### Parsing arbiter (Phase 2b — novel-pattern safety net)
+
+The rule-based parser always returns *something*; on an unseen billing convention the failure mode is a silent bad parse. `parse-artists -- --festival=<slug> --arbiter` (flag-gated, default off) adds a safety net without touching the rules:
+
+1. **Detector** (`scripts/lib/parse-detector.ts`, pure logic) — flags parses with leftover separator tokens inside a member, bare-comma lists swallowed as one "solo" artist, unbalanced parens, implausible lengths. "Unknown to `artists`" is attached as supporting evidence but never flags on its own (on a fresh festival every artist is unknown). Measured noise: 0 flags across 4 established festival catalogues, 1 true catch ("Featuring You! Hosted by House of Dinosaur") on the fifth.
+2. **Arbiter** (`scripts/lib/arbiter.ts`) — ONE batched local `claude` CLI call: flagged cases + the known artist catalogue in, `{ collective, members, confidence, reason }` suggestions out. Malformed entries dropped.
+3. **Persistence** — suggestions upserted into `parse_suggestions` (migration 038) as `pending`; names with an existing suggestion (any status) are never re-arbitrated, so a dismissal sticks.
+4. **Review** — AdminSets shows pending suggestions grouped by confidence with one-tap accept/dismiss (status flip via the admin-festivals edge function). **Accepting does not write set_artists** — the next `parse-artists --arbiter` run applies accepted suggestions as parse overrides.
+5. `--dry-run` runs the detector and prints flags but makes no LLM call and writes nothing.
+
+Accepted cases worth keeping should also be added as fixtures in `artist-parser.test.ts` (that's the long-term fix; the arbiter is the stopgap).
 
 Pre-processing: strips `(live)`, trailing `Live`, and mid-name `Live` before qualifiers like `(` or `w/`.
 
