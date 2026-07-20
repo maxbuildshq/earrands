@@ -131,6 +131,26 @@ export function parseArtistName(raw: string): ParseResult {
     return presenterResult
   }
 
+  // "<artist>'s <show concept>" — possessive show/night name (same idea as "presents":
+  // the part after the possessive is a concept, not a collaborator). Matches both
+  // "Drew's Mystery…" (singular 's) and "Sprinkles' Deeperama" (plural s'); the greedy-
+  // trimmed left side keeps the owning artist's trailing s in the plural case.
+  // e.g. "Eris Drew's Mystery Of The Motherbeat" → members: ["Eris Drew"], role: "solo"
+  // e.g. "DJ Sprinkles' Deeperama" → members: ["DJ Sprinkles"], role: "solo"
+  const possessiveMatch = parseName.match(/^(.+?)['’]s?\s+(.+)$/)
+  if (possessiveMatch) {
+    const ownerResult = parseArtistName(possessiveMatch[1].trim())
+    const conceptResult = parseArtistName(possessiveMatch[2].trim())
+    if (conceptResult.collective) {
+      return {
+        collective: null,
+        members: [...ownerResult.members, ...conceptResult.members],
+        role: ownerResult.role === 'solo' ? 'collab' : ownerResult.role,
+      }
+    }
+    return ownerResult
+  }
+
   // Colon format — only when ": " is followed by a comma-separated list
   // e.g. "LSD: Luke Slater, Steve Bicknell and Function" → collective: "LSD", members: [...], role: "member"
   const colonIdx = parseName.indexOf(': ')

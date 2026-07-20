@@ -26,6 +26,7 @@ export type FestivalSet = {
   start_time: string | null
   end_time: string | null
   is_live: boolean
+  performance_type: 'live' | 'hybrid' | null
   is_music_set: boolean
 }
 

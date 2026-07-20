@@ -81,11 +81,11 @@ export function SetCard({ set, isNow, isGoing, rating, onToggleGoing, onRate, on
                   {showConflict && !isNow && <Badge variant="conflict">Clash</Badge>}
                 </div>
               )}
-              {(set.stages || set.is_live) && (
+              {(set.stages || set.performance_type) && (
                 <div className="flex items-center gap-2">
                   {set.stages && <span>{set.stages.name}</span>}
-                  {set.stages && set.is_live && <span className="text-border">·</span>}
-                  {set.is_live && <Badge variant="live" className="text-white">Live</Badge>}
+                  {set.stages && set.performance_type && <span className="text-border">·</span>}
+                  {set.performance_type && <Badge variant="live" className="text-white">{set.performance_type === 'hybrid' ? 'Hybrid' : 'Live'}</Badge>}
                 </div>
               )}
             </div>

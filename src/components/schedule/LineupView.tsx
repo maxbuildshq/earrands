@@ -72,8 +72,8 @@ export function LineupView({ festival, sets, day, isGoing, onToggleGoing }: Prop
                 <span className="font-mono font-bold text-base text-text-primary truncate">
                   {set.artist_name}
                 </span>
-                {set.is_live && (
-                  <Badge variant="live" className="shrink-0 text-white">Live</Badge>
+                {set.performance_type && (
+                  <Badge variant="live" className="shrink-0 text-white">{set.performance_type === 'hybrid' ? 'Hybrid' : 'Live'}</Badge>
                 )}
               </div>
 
