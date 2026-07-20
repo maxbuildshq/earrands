@@ -231,6 +231,45 @@ describe('image candidate tagging + ranking', () => {
   })
 })
 
+describe('structured crosslinks', () => {
+  it('emits agreeing MB→SC and DC→SC crosslinks on the soundcloud field', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      soundcloud_url: 'https://soundcloud.com/nina-kraviz', sc_source: 'brave',
+      mb: mbWith({ mb_id: '12345678-abcd', soundcloud_urls: ['soundcloud.com/nina-kraviz'] }),
+      discogs_id: 656, discogs_links_sc: true,
+    }))
+    expect(fc.soundcloud.crosslinks).toEqual([
+      { from: 'musicbrainz', from_id: '12345678', from_url: 'https://musicbrainz.org/artist/12345678-abcd', to: 'soundcloud', to_handle: 'nina-kraviz', to_url: 'https://soundcloud.com/nina-kraviz', agrees: true },
+      { from: 'discogs', from_id: '656', from_url: 'https://www.discogs.com/artist/656', to: 'soundcloud', to_handle: 'nina-kraviz', to_url: 'https://soundcloud.com/nina-kraviz', agrees: true },
+    ])
+  })
+
+  it('emits a conflicting DC→SC crosslink when Discogs links a different SoundCloud', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      discogs_id: 42, discogs_conflicts_sc: true, discogs_sc_url: 'https://soundcloud.com/other-artist',
+    }))
+    expect(fc.discogs.crosslinks).toEqual([
+      { from: 'discogs', from_id: '42', from_url: 'https://www.discogs.com/artist/42', to: 'soundcloud', to_handle: 'other-artist', to_url: 'https://soundcloud.com/other-artist', agrees: false },
+    ])
+  })
+
+  it('emits DC→BC crosslink with the bandcamp subdomain as handle', () => {
+    const fc = computeFieldConfidence(baseEvidence({
+      bandcamp_url: 'https://speedyj.bandcamp.com', bc_source: 'discogs-bandcamp',
+      discogs_id: 42, discogs_links_bc: true,
+    }))
+    expect(fc.bandcamp.crosslinks).toEqual([
+      { from: 'discogs', from_id: '42', from_url: 'https://www.discogs.com/artist/42', to: 'bandcamp', to_handle: 'speedyj', to_url: 'https://speedyj.bandcamp.com', agrees: true },
+    ])
+  })
+
+  it('omits crosslinks entirely when there are none', () => {
+    const fc = computeFieldConfidence(baseEvidence({ discogs_id: 42 }))
+    expect(fc.discogs.crosslinks).toBeUndefined()
+    expect(fc.soundcloud.crosslinks).toBeUndefined()
+  })
+})
+
 describe('extractMbEvidence', () => {
   it('parses url relations into typed evidence with multiple discogs ids', () => {
     const ev = extractMbEvidence('mb-1', 'Andy C', 'Andy C', {

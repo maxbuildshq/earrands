@@ -94,7 +94,8 @@ export async function scoreImageCandidates(
 ): Promise<ImageCandidate[]> {
   const results: ImageCandidate[] = []
 
-  for (const candidate of candidates) {
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i]
     const sourceBonus = sourceBonusFor(candidate.source)
 
     if (config.dryRun) {
@@ -135,9 +136,21 @@ export async function scoreImageCandidates(
     }
 
     // SoundCloud avatar is self-uploaded by the artist — trust it outright once it
-    // clears a confident person-detection threshold, skipping the remaining candidates.
+    // clears a confident person-detection threshold, skipping DETR for the remaining
+    // candidates. They stay in the set unscored — candidates are never excluded.
     const last = results[results.length - 1]
     if (last.source === 'soundcloud-image' && last.score > SOUNDCLOUD_EARLY_EXIT_SCORE) {
+      for (const rest of candidates.slice(i + 1)) {
+        results.push({
+          url: rest.url,
+          source: rest.source,
+          score: sourceBonusFor(rest.source),
+          person_detected: false,
+          person_count: 0,
+          person_bbox_ratio: null,
+          error: 'not scored — SoundCloud avatar early exit',
+        })
+      }
       break
     }
   }

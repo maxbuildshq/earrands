@@ -606,7 +606,9 @@ async function pollJobsLoop() {
           execFileSync('npx', parseArgs, { stdio: 'inherit', env: process.env })
         } else {
           const { execFileSync } = await import('node:child_process')
-          const enrichArgs = ['tsx', 'scripts/enrich-artists.ts', ...jobArgs, '--auto-apply']
+          // Admin jobs always run the graph resolver: per-field confidence +
+          // confidence-tagged Discogs image candidates (manual CLI stays legacy)
+          const enrichArgs = ['tsx', 'scripts/enrich-artists.ts', ...jobArgs, '--resolver=graph', '--auto-apply']
           console.log(chalk.dim(`  Running: npx ${enrichArgs.join(' ')}`))
           execFileSync('npx', enrichArgs, { stdio: 'inherit', env: process.env })
         }

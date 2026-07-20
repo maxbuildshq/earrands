@@ -109,7 +109,7 @@ export function InlineEdit({
           {displayValue}
         </a>
       ) : (
-        <span className="text-text-primary truncate block">{displayValue}</span>
+        <span className="text-white truncate block">{displayValue}</span>
       )}
       <button
         className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent transition-opacity text-xs"

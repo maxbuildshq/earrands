@@ -5,7 +5,8 @@ function buildPrompt(artistName: string, research: BioResearch): string {
   const parts: string[] = []
   parts.push(`Generate an artist bio (2-3 short paragraphs, 3-5 sentences total across the whole bio) for "${artistName}".`)
   parts.push('Output ONLY the bio text, nothing else — no quotes, no prefix, no explanation, no markdown.')
-  parts.push('Use blank lines between paragraphs.')
+  parts.push('Stay close to a 100-word target. Fewer (60-100 words) is fine when the sources are thin; NEVER exceed 100 words.')
+  parts.push('Always split the bio into paragraphs — use blank lines between them, never one solid block.')
   parts.push('')
   parts.push('Guidelines:')
   parts.push('- Neutral, music-focused, informative. Think independent music magazine.')

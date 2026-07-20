@@ -4,8 +4,20 @@ export type EnrichmentField = 'image' | 'image-candidates' | 'instagram' | 'soun
 
 export type Confidence = 'high' | 'medium' | 'low'
 
+// One verified link between sources: <from_id on from> → <to_handle on to>.
+// agrees=false marks a conflicting link (source points at a different profile).
+export type CrossLink = {
+  from: 'discogs' | 'musicbrainz' | 'soundcloud' | 'brave'
+  from_id: string
+  from_url: string
+  to?: 'soundcloud' | 'instagram' | 'bandcamp' | 'discogs'
+  to_handle?: string
+  to_url?: string
+  agrees: boolean
+}
+
 // Per-field confidence with a human-readable evidence trail (graph resolver only)
-export type FieldConfidence = { level: Confidence; evidence: string[] }
+export type FieldConfidence = { level: Confidence; evidence: string[]; crosslinks?: CrossLink[] }
 
 export type BioSource = {
   url: string
