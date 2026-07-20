@@ -63,6 +63,15 @@ export function extractLiveStatus(name: string): { artistName: string; isLive: b
   return { artistName: name, isLive: false }
 }
 
+// "AT DAWN:" is a programming-block label, not part of the artist name. Strip it and
+// turn it into a stage modifier so at-dawn sets live on their own stage variant
+// (e.g. "AT DAWN: JAMES HOLDEN" on "GREENHOUSE" → "JAMES HOLDEN" on "GREENHOUSE: AT DAWN").
+export function splitAtDawn(artistName: string, stage: string | null): { artistName: string; stage: string | null } {
+  const m = artistName.match(/^at dawn:\s*(.+)$/i)
+  if (!m) return { artistName, stage }
+  return { artistName: m[1].trim(), stage: stage ? `${stage}: AT DAWN` : stage }
+}
+
 export function getStageName(ts: NuxtTimeslot): string | null {
   if (!ts.location) return null
 
@@ -327,17 +336,19 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
     }
 
     for (const s of result.sets) {
-      const match = matchCanonical(s.artist_name, canonical)
-      if (match && normalizeName(match.name) !== normalizeName(s.artist_name)) {
-        console.log(`    ~ name: "${s.artist_name}" → "${match.name}" (matched Nuxt spelling)`)
+      const { artistName: dawnName, stage: dawnStage } = splitAtDawn(s.artist_name, s.stage)
+      const match = matchCanonical(dawnName, canonical)
+      if (match && normalizeName(match.name) !== normalizeName(dawnName)) {
+        console.log(`    ~ name: "${dawnName}" → "${match.name}" (matched Nuxt spelling)`)
       }
-      if (s.stage && !stageNames.has(s.stage)) {
-        stageNames.add(s.stage)
-        stages.push({ name: s.stage, sort_order: stages.length + 1 })
+      if (dawnStage && !stageNames.has(dawnStage)) {
+        stageNames.add(dawnStage)
+        stages.push({ name: dawnStage, sort_order: stages.length + 1 })
       }
       sets.push({
         ...s,
-        artist_name: match?.name ?? s.artist_name, // Nuxt casing/spelling wins when the artist matches
+        stage: dawnStage,
+        artist_name: match?.name ?? dawnName, // Nuxt casing/spelling wins when the artist matches
         is_live: s.is_live || (match?.isLive ?? false),
       })
     }

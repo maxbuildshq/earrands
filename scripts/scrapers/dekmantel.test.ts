@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { parseIsoTime, extractLiveStatus, getStageName, resolveDayDate, levenshtein, matchCanonical, type CanonicalName, type NuxtTimeslot } from './dekmantel.js'
+import { parseIsoTime, extractLiveStatus, getStageName, resolveDayDate, levenshtein, matchCanonical, splitAtDawn, type CanonicalName, type NuxtTimeslot } from './dekmantel.js'
+
+describe('splitAtDawn', () => {
+  it('strips the AT DAWN prefix and moves the set to a dawn stage variant', () => {
+    expect(splitAtDawn('AT DAWN: JAMES HOLDEN', 'GREENHOUSE')).toEqual({ artistName: 'JAMES HOLDEN', stage: 'GREENHOUSE: AT DAWN' })
+    expect(splitAtDawn('At Dawn: Colin Benders', 'RADAR')).toEqual({ artistName: 'Colin Benders', stage: 'RADAR: AT DAWN' })
+  })
+  it('leaves non-dawn sets untouched', () => {
+    expect(splitAtDawn('Fjaak', 'UFO I')).toEqual({ artistName: 'Fjaak', stage: 'UFO I' })
+  })
+})
 
 describe('levenshtein', () => {
   it('counts single-character substitutions', () => {

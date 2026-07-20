@@ -277,6 +277,22 @@ describe('parseArtistName', () => {
         role: 'collab',
       })
     })
+
+    it('drops a singular possessive show concept', () => {
+      expect(parseArtistName("Eris Drew's Mystery Of The Motherbeat")).toEqual({
+        collective: null,
+        members: ['Eris Drew'],
+        role: 'solo',
+      })
+    })
+
+    it('drops a plural possessive show concept, keeping the owner name intact', () => {
+      expect(parseArtistName("DJ Sprinkles' Deeperama")).toEqual({
+        collective: null,
+        members: ['DJ Sprinkles'],
+        role: 'solo',
+      })
+    })
   })
 
   describe('hosted by', () => {
