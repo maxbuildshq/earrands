@@ -172,14 +172,19 @@ export async function enrichArtist(
             // Discogs name search can match the wrong artist. Only trust its images when
             // the Discogs page itself links out to a social profile — and that profile
             // doesn't contradict a SoundCloud URL we already confirmed via Brave/the DB.
+            // Compare scheme/www-insensitively: Discogs often stores http:// links.
+            const sameProfile = (a: string | null, b: string | null) =>
+              !!a && !!b &&
+              a.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '') ===
+              b.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')
             const discogsConflictsWithKnownSc = !!(
               result.soundcloud_url && discogs.soundcloud_url &&
-              discogs.soundcloud_url !== result.soundcloud_url
+              !sameProfile(discogs.soundcloud_url, result.soundcloud_url)
             )
             const discogsHasCrossRef = !!(discogs.instagram_url || discogs.soundcloud_url)
             discogsConflictsSc = discogsConflictsWithKnownSc
             if (discogsConflictsWithKnownSc) discogsScUrl = discogs.soundcloud_url
-            discogsLinksSc = !!(result.soundcloud_url && discogs.soundcloud_url === result.soundcloud_url)
+            discogsLinksSc = sameProfile(result.soundcloud_url, discogs.soundcloud_url)
             discogsLinksBc = !!(result.bandcamp_url && discogs.bandcamp_url && normalizeBandcampUrl(discogs.bandcamp_url) === result.bandcamp_url)
             if (graph || (discogsHasCrossRef && !discogsConflictsWithKnownSc)) {
               // Graph mode: candidates from every source are always collected and

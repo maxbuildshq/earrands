@@ -13,7 +13,7 @@ import {
   scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
   discogsUrl,
 } from '../../components/admin/InlineEdit'
-import type { Artist, FieldConfidence, ImageCandidate } from '../../types/database'
+import type { Artist, CrossLink, FieldConfidence, ImageCandidate } from '../../types/database'
 
 const FILTERS = [
   { key: 'pending', label: 'Pending' },
@@ -69,23 +69,85 @@ const CHIP_STYLE: Record<Level, string> = {
 
 const CHIP_LABEL: Record<Level, string> = { high: 'hi', medium: 'med', low: 'lo' }
 
-// Instant tooltip with the full evidence trail — why we believe this field,
-// what corroborates it — for every level, not just conflicts
-function ConfidenceChip({ fc }: { fc: FieldConfidence | undefined }) {
-  const [open, setOpen] = useState(false)
-  if (!fc) {
-    return <span className="inline-flex px-1 text-[10px] font-mono uppercase leading-tight border border-border text-border cursor-help" title="No confidence data — enriched before per-field confidence existed">—</span>
-  }
+const SOURCE_ABBR: Record<string, string> = {
+  discogs: 'DC', musicbrainz: 'MB', soundcloud: 'SC', instagram: 'IG', bandcamp: 'BC', brave: 'BRV',
+}
+
+// One structured cross-link as a compact row: <SRC id-link> → <DST handle-link>.
+// Red when the source points at a different profile than ours (conflict).
+function CrossLinkRow({ cl }: { cl: CrossLink }) {
+  const linkCls = 'underline hover:text-accent break-all'
   return (
-    <span className="relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <span className={`inline-flex px-1 text-[10px] font-mono font-bold uppercase leading-tight cursor-help ${CHIP_STYLE[fc.level]}`}>
-        {CHIP_LABEL[fc.level]}
-      </span>
-      {open && (
-        <span className="absolute z-[110] left-0 top-full mt-1 w-max max-w-72 bg-surface border border-border shadow-lg px-2 py-1.5 space-y-0.5 pointer-events-none">
-          {fc.evidence.map((e, i) => (
-            <span key={i} className="block font-mono text-[11px] normal-case font-normal leading-snug text-text-primary">{e}</span>
-          ))}
+    <span className={`flex items-center gap-1 font-mono text-[11px] normal-case font-normal leading-snug ${cl.agrees ? 'text-white' : 'bg-negative text-white px-1'}`}>
+      <span className="uppercase text-text-secondary">{SOURCE_ABBR[cl.from] ?? cl.from}</span>
+      <a href={cl.from_url} target="_blank" rel="noreferrer" className={linkCls}>{cl.from_id}</a>
+      <span>→</span>
+      {cl.to && <span className="uppercase text-text-secondary">{SOURCE_ABBR[cl.to] ?? cl.to}</span>}
+      {cl.to_handle && (cl.to_url
+        ? <a href={cl.to_url} target="_blank" rel="noreferrer" className={linkCls}>{cl.to_handle}</a>
+        : <span>{cl.to_handle}</span>)}
+    </span>
+  )
+}
+
+// Instant tooltip with the full evidence trail — why we believe this field,
+// what corroborates it — for every level, not just conflicts. Clicking the chip
+// opens a picker to set the level directly (admin override, no value edit needed).
+function ConfidenceChip({ fc, onSet }: { fc: FieldConfidence | undefined; onSet?: (level: Level) => void }) {
+  const [open, setOpen] = useState(false)
+  const [picker, setPicker] = useState(false)
+  const crosslinks = fc?.crosslinks ?? []
+  return (
+    <span className="relative inline-flex" onMouseEnter={() => setOpen(true)} onMouseLeave={() => { setOpen(false); setPicker(false) }}>
+      <button
+        type="button"
+        onClick={() => onSet && setPicker(p => !p)}
+        className={`inline-flex px-1 text-[10px] font-mono uppercase leading-tight ${onSet ? 'cursor-pointer' : 'cursor-help'} ${
+          fc ? `font-bold ${CHIP_STYLE[fc.level]}` : 'border border-border text-text-secondary'
+        }`}
+      >
+        {fc ? CHIP_LABEL[fc.level] : '—'}
+      </button>
+      {(open || picker) && (
+        // pt-1 wrapper instead of mt-1: the gap between chip and panel stays
+        // hoverable, so moving the cursor into the tooltip doesn't dismiss it
+        <span className="absolute z-[110] left-0 top-full w-max pt-1">
+        <span className="block max-w-80 bg-surface border border-border shadow-lg px-2 py-1.5 space-y-1">
+          {picker && onSet && (
+            <span className="flex gap-1 pb-1 border-b border-border">
+              {(['high', 'medium', 'low'] as Level[]).map(l => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => { onSet(l); setPicker(false) }}
+                  className={`px-1.5 py-0.5 text-[10px] font-mono font-bold uppercase cursor-pointer ${CHIP_STYLE[l]} ${fc?.level === l ? 'outline-2 outline-white' : 'opacity-80 hover:opacity-100'}`}
+                >
+                  {CHIP_LABEL[l]}
+                </button>
+              ))}
+            </span>
+          )}
+          {fc ? (
+            <>
+              <ul className="space-y-0.5 list-disc pl-3.5">
+                {fc.evidence.map((e, i) => (
+                  <li key={i} className="font-mono text-[11px] normal-case font-normal leading-snug text-white">
+                    <Linkified text={e} />
+                  </li>
+                ))}
+              </ul>
+              {crosslinks.length > 0 && (
+                <span className="block pt-1 border-t border-border space-y-0.5">
+                  {crosslinks.map((cl, i) => <CrossLinkRow key={i} cl={cl} />)}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="block font-mono text-[11px] normal-case font-normal leading-snug text-text-secondary max-w-56">
+              No confidence data — enriched before per-field confidence existed
+            </span>
+          )}
+        </span>
         </span>
       )}
     </span>
@@ -103,6 +165,23 @@ function confirmField(a: Artist, key: string): Record<string, FieldConfidence> {
   return {
     ...(a.enrichment_confidence ?? {}),
     [key]: { level: 'high', evidence: [stamp, ...provenance.filter(e => !e.startsWith('admin-confirmed'))] },
+  }
+}
+
+// Direct confidence override from the chip picker — no value round-trip needed.
+// Prior level + machine evidence stay in the trail as provenance (ADR 011).
+function adminSetLevel(a: Artist, key: string, level: Level): Record<string, FieldConfidence> {
+  const stamp = `admin-set ${level} ${new Date().toISOString().slice(0, 10)}`
+  const prior = a.enrichment_confidence?.[key]
+  const provenance = prior
+    ? [
+        ...(prior.level !== level ? [`was ${prior.level}`] : []),
+        ...prior.evidence.filter(e => !e.startsWith('admin-set') && !e.startsWith('admin-confirmed') && !e.startsWith('was ')),
+      ]
+    : []
+  return {
+    ...(a.enrichment_confidence ?? {}),
+    [key]: { level, evidence: [stamp, ...provenance], ...(prior?.crosslinks ? { crosslinks: prior.crosslinks } : {}) },
   }
 }
 
@@ -229,11 +308,12 @@ function CandidateThumb({ candidate, selected, onPick }: {
   )
 }
 
-function FieldRow({ label, chip, checked, onCheck, conflictLines, children }: {
+function FieldRow({ label, chip, checked, onCheck, onSetChip, conflictLines, children }: {
   label: string
   chip: FieldConfidence | undefined | null
   checked?: boolean
   onCheck?: (v: boolean) => void
+  onSetChip?: (level: Level) => void
   conflictLines?: string[]
   children: ReactNode
 }) {
@@ -246,7 +326,7 @@ function FieldRow({ label, chip, checked, onCheck, conflictLines, children }: {
           <span className="w-[13px] shrink-0" />
         )}
         <span className="w-9 shrink-0 text-xs uppercase tracking-wider text-text-secondary">{label}</span>
-        {chip !== null && <ConfidenceChip fc={chip ?? undefined} />}
+        {chip !== null && <ConfidenceChip fc={chip ?? undefined} onSet={onSetChip} />}
         <div className="min-w-0 flex-1">{children}</div>
       </div>
       {conflictLines && conflictLines.length > 0 && (
@@ -274,7 +354,7 @@ function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boole
   const current = versions.find(v => v.key === tab) ?? versions[0]
 
   return (
-    <div className="flex-1 min-w-0 space-y-1">
+    <div className="flex-1 min-w-0 self-stretch flex flex-col gap-1">
       <div className="flex items-center gap-2 flex-wrap">
         <input type="checkbox" checked={checked} onChange={e => onCheck(e.target.checked)} className="accent-accent shrink-0" title="Include bio in re-enrichment" />
         <span className="text-xs uppercase tracking-wider text-text-secondary">Bio</span>
@@ -303,11 +383,11 @@ function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boole
       </div>
       {current?.warning && <p className="font-mono text-[11px] bg-negative text-white px-1.5 py-0.5 inline-block">⚠ {current.warning}</p>}
       {current?.content ? (
-        <p className="font-mono text-xs text-text-primary leading-relaxed max-h-36 overflow-y-auto whitespace-pre-line pr-1">
+        <p className="font-mono text-xs text-white leading-relaxed flex-1 min-h-0 basis-0 overflow-y-auto whitespace-pre-line pr-1">
           {current.content}
         </p>
       ) : (
-        <p className="font-mono text-xs text-border">No bio</p>
+        <p className="font-mono text-xs text-text-secondary">No bio</p>
       )}
     </div>
   )
@@ -354,6 +434,13 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
     } as Partial<Artist> & { id: string })
   }
 
+  function setConfidence(key: string, level: Level) {
+    updateArtist.mutate({
+      id: artist.id,
+      enrichment_confidence: adminSetLevel(artist, key, level),
+    } as Partial<Artist> & { id: string })
+  }
+
   // Conflict evidence surfaces directly under the field it belongs to
   function conflictLines(key: string): string[] {
     return (fc[key]?.evidence ?? []).filter(e => e.includes('DIFFER') || e.includes('conflict'))
@@ -376,14 +463,14 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
         <div className="flex items-center gap-1.5">
           <input type="checkbox" checked={enrichFields.has('image')} onChange={e => toggleField('image', e.target.checked)} className="accent-accent" title="Include image in re-enrichment" />
           <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary">Image</span>
-          <ConfidenceChip fc={fc.image} />
+          <ConfidenceChip fc={fc.image} onSet={l => setConfidence('image', l)} />
         </div>
         <Carousel artist={artist} onPick={pickImage} />
       </div>
 
       <div className="w-72 shrink-0 space-y-1.5 font-mono text-sm">
         <div className="flex items-center gap-2 flex-wrap">
-          <Link to={`/admin/artists/${artist.id}`} className="font-bold text-base text-text-primary hover:text-accent transition-colors">
+          <Link to={`/admin/artists/${artist.id}`} className="font-bold text-base text-white hover:text-accent transition-colors">
             {artist.name}
           </Link>
           <EnrichmentStatusBadge status={artist.enrichment_status} />
@@ -392,7 +479,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
           <p className="text-[11px] text-text-secondary">{artist.soundcloud_followers.toLocaleString()} SC followers</p>
         )}
 
-        <FieldRow label="SC" chip={fc.soundcloud} checked={enrichFields.has('soundcloud')} onCheck={v => toggleField('soundcloud', v)} conflictLines={conflictLines('soundcloud')}>
+        <FieldRow label="SC" chip={fc.soundcloud} checked={enrichFields.has('soundcloud')} onCheck={v => toggleField('soundcloud', v)} onSetChip={l => setConfidence('soundcloud', l)} conflictLines={conflictLines('soundcloud')}>
           <InlineEdit
             value={artist.soundcloud_url ?? ''}
             displayValue={scHandle(artist.soundcloud_url)}
@@ -403,7 +490,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
             build={scBuild}
           />
         </FieldRow>
-        <FieldRow label="IG" chip={fc.instagram} checked={enrichFields.has('instagram')} onCheck={v => toggleField('instagram', v)} conflictLines={conflictLines('instagram')}>
+        <FieldRow label="IG" chip={fc.instagram} checked={enrichFields.has('instagram')} onCheck={v => toggleField('instagram', v)} onSetChip={l => setConfidence('instagram', l)} conflictLines={conflictLines('instagram')}>
           <InlineEdit
             value={artist.instagram_url ?? ''}
             displayValue={igHandle(artist.instagram_url)}
@@ -414,7 +501,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
             build={igBuild}
           />
         </FieldRow>
-        <FieldRow label="BC" chip={fc.bandcamp} checked={enrichFields.has('bandcamp')} onCheck={v => toggleField('bandcamp', v)} conflictLines={conflictLines('bandcamp')}>
+        <FieldRow label="BC" chip={fc.bandcamp} checked={enrichFields.has('bandcamp')} onCheck={v => toggleField('bandcamp', v)} onSetChip={l => setConfidence('bandcamp', l)} conflictLines={conflictLines('bandcamp')}>
           <InlineEdit
             value={artist.bandcamp_url ?? ''}
             displayValue={bcHandle(artist.bandcamp_url)}
@@ -425,7 +512,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
             build={bcBuild}
           />
         </FieldRow>
-        <FieldRow label="DC" chip={fc.discogs} checked={enrichFields.has('discogs')} onCheck={v => toggleField('discogs', v)} conflictLines={conflictLines('discogs')}>
+        <FieldRow label="DC" chip={fc.discogs} checked={enrichFields.has('discogs')} onCheck={v => toggleField('discogs', v)} onSetChip={l => setConfidence('discogs', l)} conflictLines={conflictLines('discogs')}>
           <InlineEdit
             value={artist.discogs_id ? String(artist.discogs_id) : ''}
             displayValue={artist.discogs_id ? String(artist.discogs_id) : null}
@@ -437,7 +524,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
             placeholder="id"
           />
         </FieldRow>
-        <FieldRow label="Loc" chip={fc.location} checked={enrichFields.has('location')} onCheck={v => toggleField('location', v)}>
+        <FieldRow label="Loc" chip={fc.location} checked={enrichFields.has('location')} onCheck={v => toggleField('location', v)} onSetChip={l => setConfidence('location', l)}>
           <InlineLocationEdit
             city={artist.city}
             countryCode={artist.country_code}

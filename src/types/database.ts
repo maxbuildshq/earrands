@@ -105,9 +105,23 @@ export type ImageCandidate = {
   error?: string
 }
 
+// One verified link between sources: <from_id on from> → <to_handle on to>.
+// Rendered in the confidence tooltip as compact linked rows; agrees=false marks
+// a conflicting link (the source points at a different profile than ours).
+export type CrossLink = {
+  from: 'discogs' | 'musicbrainz' | 'soundcloud' | 'brave'
+  from_id: string
+  from_url: string
+  to?: 'soundcloud' | 'instagram' | 'bandcamp' | 'discogs'
+  to_handle?: string
+  to_url?: string
+  agrees: boolean
+}
+
 export type FieldConfidence = {
   level: 'high' | 'medium' | 'low'
   evidence: string[]
+  crosslinks?: CrossLink[]
 }
 
 export type SetArtist = {
