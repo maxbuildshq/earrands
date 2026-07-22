@@ -48,6 +48,20 @@ festival_requests  id, user_id, raw_name, region (nullable), notified_at (nullab
 
 URL and anon key: `.env.local` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 
+## Edge Functions
+
+Edge functions live in `supabase/functions/<name>/index.ts` (Deno) — one directory per function (e.g. `admin-artists`, `admin-festivals`, `admin-auth`, `admin-usage`, `admin-enrichment`, `admin-requests`, `admin-notify`, `welcome-email`).
+
+**Deploy after every change — this is not optional.** Editing an edge function's source does nothing until it's deployed; the running function keeps serving the old code, so an undeployed change silently looks like "no effect" or, worse, a half-applied fix. After touching any file under `supabase/functions/`, deploy it in the same unit of work:
+
+```bash
+npx supabase functions deploy <name>          # e.g. admin-artists
+```
+
+(or the Supabase MCP `deploy_edge_function`). Never end a task that changed an edge function without deploying it — call it out explicitly if deployment is blocked.
+
+**Secrets** are per-project, set separately from `.env.local` (the CLI/scripts read `.env.local`; edge functions read Deno env secrets). Set them once with `npx supabase secrets set KEY=value`. `admin-artists` reads: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_UID`, and (for the Discogs image refetch in `update_and_refetch`) `DISCOGS_CONSUMER_KEY` / `DISCOGS_CONSUMER_SECRET`. A missing optional secret degrades gracefully (Discogs refetch is skipped), so verify secrets exist when a function's remote behavior differs from the code.
+
 ## useSets Join Query
 
 The `useSets` hook joins through `set_artists → artists` to fetch bios:

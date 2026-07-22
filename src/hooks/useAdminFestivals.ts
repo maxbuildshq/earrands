@@ -76,6 +76,7 @@ export function useUpdateStage() {
 
 type SetUpdate = {
   setId: string
+  artist_name?: string
   stage_id?: string | null
   start_time?: string | null
   end_time?: string | null

@@ -79,6 +79,67 @@ async function scrapeSoundCloudProfile(scUrl: string) {
   }
 }
 
+const DISCOGS_API = 'https://api.discogs.com'
+
+// Fetch up to 5 image URLs for a Discogs artist id (primary first), mirroring the
+// enrichment pipeline's ordering. Returns null when creds are unset or the request
+// fails — the caller then leaves the carousel untouched.
+async function fetchDiscogsImages(discogsId: number): Promise<string[] | null> {
+  const key = Deno.env.get('DISCOGS_CONSUMER_KEY')
+  const secret = Deno.env.get('DISCOGS_CONSUMER_SECRET')
+  if (!key || !secret) return null
+  try {
+    const res = await fetch(`${DISCOGS_API}/artists/${discogsId}`, {
+      headers: {
+        'Authorization': `Discogs key=${key}, secret=${secret}`,
+        'User-Agent': 'earrands/1.0',
+      },
+    })
+    if (!res.ok) return null
+    const data = await res.json() as { images?: Array<{ type: string; uri: string }> }
+    const images = data.images ?? []
+    const ordered = [...images.filter(i => i.type === 'primary'), ...images.filter(i => i.type !== 'primary')]
+    return ordered.map(i => i.uri).filter(Boolean).slice(0, 5)
+  } catch {
+    return null
+  }
+}
+
+// Image-candidate carousel entries (see EnrichmentResult.image_candidates). The
+// edge function can't run DETR scoring, so refetched candidates are unscored —
+// admin can re-run enrichment image scoring if a proper ranking is needed.
+type Candidate = {
+  url: string
+  source: string
+  score: number
+  person_detected: boolean
+  person_count: number
+  person_bbox_ratio: number | null
+  confidence?: string
+}
+
+function makeCandidate(url: string, source: string, confidence?: string): Candidate {
+  return { url, source, score: 0, person_detected: false, person_count: 0, person_bbox_ratio: null, ...(confidence ? { confidence } : {}) }
+}
+
+// Point the SoundCloud-avatar candidate at the freshly-scraped URL (or prepend it),
+// so the carousel thumbnail matches the newly-selected winner image.
+function upsertSoundcloudCandidate(candidates: Candidate[], url: string): Candidate[] {
+  if (candidates.some(c => c.source === 'soundcloud-image')) {
+    return candidates.map(c => (c.source === 'soundcloud-image' ? { ...c, url } : c))
+  }
+  return [makeCandidate(url, 'soundcloud-image'), ...candidates]
+}
+
+// Replace every Discogs candidate with the freshly-fetched image set, preserving
+// the prior Discogs confidence tag (identity doesn't change on an image refetch).
+function replaceDiscogsCandidates(candidates: Candidate[], images: string[]): Candidate[] {
+  const priorConfidence = candidates.find(c => c.source.startsWith('discogs-image'))?.confidence
+  const nonDiscogs = candidates.filter(c => !c.source.startsWith('discogs-image'))
+  const fresh = images.map((url, i) => makeCandidate(url, i === 0 ? 'discogs-image' : `discogs-image-${i + 1}`, priorConfidence))
+  return [...nonDiscogs, ...fresh]
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
@@ -175,30 +236,53 @@ Deno.serve(async (req) => {
       const { artist_id, updates } = body
       if (!artist_id) return json({ error: 'Missing artist_id' }, 400)
 
-      // Get current artist to detect SC URL change
+      // Current values to diff against + the candidate carousel we may refresh
       const { data: current } = await supabase
         .from('artists')
-        .select('soundcloud_url')
+        .select('soundcloud_url, discogs_id, image_candidates')
         .eq('id', artist_id)
         .single()
 
-      const scUrlChanged = updates.soundcloud_url &&
-        updates.soundcloud_url !== current?.soundcloud_url
+      const refetchedFields: Record<string, unknown> = {}
+      let candidates: Candidate[] = Array.isArray(current?.image_candidates) ? current!.image_candidates : []
+      let candidatesChanged = false
 
-      let refetchedFields: Record<string, unknown> = {}
+      // SoundCloud URL change → refresh profile metadata + avatar (winner) and
+      // the SC candidate thumbnail in the carousel.
+      const scUrlChanged = updates.soundcloud_url && updates.soundcloud_url !== current?.soundcloud_url
       if (scUrlChanged && updates.soundcloud_url) {
         const scData = await scrapeSoundCloudProfile(updates.soundcloud_url)
         if (scData) {
-          const { sc_description, ...rest } = scData as Record<string, unknown>
-          refetchedFields = rest
-          // SC description goes into bio_festival or a note, not directly into bio
-          if (sc_description) {
-            refetchedFields.bio_source = 'soundcloud'
+          // Strip sc_description (not a real column) and refresh only profile
+          // metadata (image / location / followers). Crucially, do NOT touch
+          // bio_source: this re-fetch does not change the active `bio` text, so
+          // relabeling it 'soundcloud' mis-attributed a previously-activated bio
+          // (e.g. the generated one) to SoundCloud. The SC bio text is captured
+          // separately during full enrichment via bio_research.
+          const { sc_description: _sc, ...rest } = scData as Record<string, unknown>
+          Object.assign(refetchedFields, rest)
+          if (typeof rest.image_url === 'string') {
+            candidates = upsertSoundcloudCandidate(candidates, rest.image_url)
+            candidatesChanged = true
           }
         }
         // Keep the embed URL in sync with the profile URL whenever it changes
         refetchedFields.soundcloud_embed_url = updates.soundcloud_url
       }
+
+      // Discogs id change → refetch the Discogs image set into the carousel and
+      // point the winner at the new primary, mirroring the SoundCloud behavior.
+      const discogsIdChanged = updates.discogs_id != null && updates.discogs_id !== current?.discogs_id
+      if (discogsIdChanged) {
+        const dcImages = await fetchDiscogsImages(updates.discogs_id as number)
+        if (dcImages && dcImages.length > 0) {
+          candidates = replaceDiscogsCandidates(candidates, dcImages)
+          candidatesChanged = true
+          refetchedFields.image_url = dcImages[0]
+        }
+      }
+
+      if (candidatesChanged) refetchedFields.image_candidates = candidates
 
       const merged = { ...refetchedFields, ...updates }
       const { data, error } = await supabase
@@ -208,7 +292,7 @@ Deno.serve(async (req) => {
         .select()
         .single()
       if (error) return json({ error: error.message }, 500)
-      return json({ data, refetched: scUrlChanged ? Object.keys(refetchedFields) : [] })
+      return json({ data, refetched: Object.keys(refetchedFields) })
     }
 
     // Approve = human vetted the whole card (ADR 011): status → reviewed and every

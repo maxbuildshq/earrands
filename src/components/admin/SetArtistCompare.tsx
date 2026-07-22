@@ -59,6 +59,59 @@ function TimeCell({ value, onSave, className }: { value: string | null; onSave: 
   )
 }
 
+// Set name: click text to pin (existing behavior), pencil to rename in place.
+// Renaming only changes the display string — set_artists links are untouched;
+// re-run parse-artists if the new name should re-parse to different artists.
+function SetNameCell({ name, pinned, onPin, onSave }: {
+  name: string
+  pinned: boolean
+  onPin: () => void
+  onSave: (name: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(name)
+
+  function commit() {
+    if (draft.trim() && draft.trim() !== name) onSave(draft.trim())
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        className="bg-transparent border-b border-accent text-accent font-mono text-sm w-full outline-none"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') { setDraft(name); setEditing(false) }
+        }}
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1 group">
+      <span
+        className={`cursor-pointer hover:text-accent ${pinned ? 'text-accent' : 'text-text-primary'}`}
+        onClick={onPin}
+        title="Click to pin this set's artists in the right table"
+      >
+        {name}
+      </span>
+      <button
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent transition-opacity text-xs"
+        onClick={() => { setDraft(name); setEditing(true) }}
+        title="Rename set"
+      >
+        ✎
+      </button>
+    </div>
+  )
+}
+
 export function SetArtistCompare({ sets, stages, fill = false }: { sets: SetWithStage[]; stages: Stage[]; fill?: boolean }) {
   const [hoveredSetId, setHoveredSetId] = useState<string | null>(null)
   const [pinnedSetId, setPinnedSetId] = useState<string | null>(null)
@@ -163,12 +216,13 @@ export function SetArtistCompare({ sets, stages, fill = false }: { sets: SetWith
                     onMouseEnter={() => setHoveredSetId(s.id)}
                     onMouseLeave={() => setHoveredSetId(null)}
                   >
-                    <td
-                      className="px-3 py-2 text-text-primary cursor-pointer hover:text-accent"
-                      onClick={() => togglePin(s.id)}
-                      title="Click to pin this set's artists in the right table"
-                    >
-                      {s.artist_name}
+                    <td className="px-3 py-2">
+                      <SetNameCell
+                        name={s.artist_name}
+                        pinned={pinned}
+                        onPin={() => togglePin(s.id)}
+                        onSave={name => updateSet.mutate({ setId: s.id, artist_name: name })}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <select

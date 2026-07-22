@@ -5,15 +5,18 @@ import { useSets, useStages } from '../../hooks/useFestivalData'
 import { SetArtistCompare } from '../../components/admin/SetArtistCompare'
 import { ParseSuggestions } from '../../components/admin/ParseSuggestions'
 
+import { rememberedFestival, rememberFestival } from '../../lib/adminFilters'
+
 export default function AdminSets() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const festivalId = searchParams.get('festival') ?? ''
+  const festivalId = searchParams.get('festival') ?? rememberedFestival()
 
   const { data: festivals = [] } = useAdminFestivals()
   const { data: sets = [], isLoading } = useSets(festivalId || undefined)
   const { data: stages = [] } = useStages(festivalId || undefined)
 
   function setFestivalId(v: string) {
+    rememberFestival(v)
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (v) next.set('festival', v)
