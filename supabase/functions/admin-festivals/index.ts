@@ -196,8 +196,9 @@ Deno.serve(async (req) => {
       const { set_id } = body
       if (!set_id) return json({ error: 'Missing set_id' }, 400)
 
-      // Only the schedule fields are editable here (last-minute organiser changes)
-      const allowed = ['stage_id', 'start_time', 'end_time', 'day']
+      // Only the schedule fields + display name are editable here (last-minute
+      // organiser changes; artist_name is display-only — set_artists untouched)
+      const allowed = ['artist_name', 'stage_id', 'start_time', 'end_time', 'day']
       const filtered: Record<string, unknown> = {}
       for (const key of allowed) {
         if (key in body) filtered[key] = body[key]
@@ -210,7 +211,10 @@ Deno.serve(async (req) => {
         .eq('id', set_id)
         .select()
         .single()
-      if (error) return json({ error: error.message }, 500)
+      if (error) {
+        if (error.code === '23505') return json({ error: 'A set with this name already exists for this festival and day' }, 409)
+        return json({ error: error.message }, 500)
+      }
       return json(data)
     }
 

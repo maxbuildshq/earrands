@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button'
 import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBadge'
 import { SourceLabel } from '../../components/admin/SourceLabel'
 import {
-  InlineEdit, InlineLocationEdit,
+  InlineEdit, InlineLocationEdit, InlineTextEdit,
   scHandle, igHandle, bcHandle,
   scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
   discogsUrl,
@@ -221,19 +221,26 @@ export default function AdminArtistDetail() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <BioCard title="Active Bio" content={artist.bio} isActive />
+          <BioCard
+            title="Active Bio"
+            content={artist.bio}
+            isActive
+            onSave={v => update.mutate({ id: artist.id, bio: v || null })}
+          />
           <BioCard
             title="Festival Bio"
             content={artist.bio_festival}
             onActivate={artist.bio_festival ? () => activateBio.mutate({ artistId: artist.id, source: 'festival' }) : undefined}
             isActive={artist.bio_source === 'festival'}
             warning={artist.bio_research?.festival_bio_flagged ? 'Contains festival name — may not be suitable for cross-festival use' : undefined}
+            onSave={v => update.mutate({ id: artist.id, bio_festival: v || null })}
           />
           <BioCard
             title="Generated Bio"
             content={artist.bio_generated}
             onActivate={artist.bio_generated ? () => activateBio.mutate({ artistId: artist.id, source: 'generated' }) : undefined}
             isActive={artist.bio_source === 'generated'}
+            onSave={v => update.mutate({ id: artist.id, bio_generated: v || null })}
           />
         </div>
       </section>
@@ -270,12 +277,14 @@ function BioCard({
   onActivate,
   isActive,
   warning,
+  onSave,
 }: {
   title: string
   content: string | null
   onActivate?: () => void
   isActive?: boolean
   warning?: string
+  onSave?: (val: string) => void
 }) {
   return (
     <div className={`border p-4 space-y-2 ${isActive ? 'border-accent' : 'border-border'}`}>
@@ -290,7 +299,9 @@ function BioCard({
       {warning && (
         <p className="font-mono text-xs text-negative">{warning}</p>
       )}
-      {content ? (
+      {onSave ? (
+        <InlineTextEdit value={content} className="max-h-40 overflow-y-auto text-text-primary" onSave={onSave} placeholder="No content — click to add" />
+      ) : content ? (
         <p className="font-mono text-xs text-text-primary leading-relaxed max-h-40 overflow-y-auto whitespace-pre-line">
           {content}
         </p>

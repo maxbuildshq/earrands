@@ -97,6 +97,14 @@ export async function enrichArtist(
   let bcSource: string | null = artist.bandcamp_url ? 'db' : null
   let locationSource: string | null = artist.city ? 'db' : null
 
+  // Per-source fetch outcomes for the CLI row (see EnrichmentResult.fetch_log)
+  let braveScError = false
+  let braveIgError = false
+  let discogsAttempted = false
+  let discogsFound = false
+  let discogsError = false
+  let mbError = false
+
   if (!bioOnly) {
     // ── Step 1: Find SoundCloud via Brave ──────────────────────────────────
     // Field-scoped corroboration rule (ADR 011): when the run covers this field,
@@ -121,6 +129,7 @@ export async function enrichArtist(
         }
       } catch (err: any) {
         if (err.message?.includes('rate limit')) throw err
+        braveScError = true
         result.review_notes.push(`Brave SC search failed: ${err.message}`)
       }
       await sleep(300)
@@ -136,6 +145,7 @@ export async function enrichArtist(
         }
       } catch (err: any) {
         if (err.message?.includes('rate limit')) throw err
+        braveIgError = true
         result.review_notes.push(`Brave IG search failed: ${err.message}`)
       }
       await sleep(300)
@@ -150,6 +160,7 @@ export async function enrichArtist(
         mbEvidence = await lookupMusicBrainzArtist(artist.name)
         if (mbEvidence) result.sources.push('musicbrainz')
       } catch (err: any) {
+        mbError = true
         result.review_notes.push(`MusicBrainz lookup failed: ${err.message}`)
       }
     }
@@ -163,10 +174,12 @@ export async function enrichArtist(
                            needsField(fields, 'instagram')
 
       if (needsDiscogs) {
+        discogsAttempted = true
         config.onProgress?.(artist.name, 'Searching Discogs')
         try {
           const discogs = await searchDiscogsArtist(artist.name, discogsKey!, discogsSecret!)
           if (discogs) {
+            discogsFound = true
             result.discogs_id = discogs.discogs_id
 
             // Discogs name search can match the wrong artist. Only trust its images when
@@ -218,6 +231,7 @@ export async function enrichArtist(
           }
         } catch (err: any) {
           if (err.message?.includes('rate limit')) throw err
+          discogsError = true
           result.review_notes.push(`Discogs search failed: ${err.message}`)
         }
         await sleep(500)
@@ -446,6 +460,36 @@ export async function enrichArtist(
       }
     }
   }
+
+  // ── Per-source fetch outcomes for the CLI row ────────────────────────────
+  // Only actively-queried sources are logged (green=hit / red=miss|error).
+  // Opportunistic/derived fields (embed/bc/loc/followers) are handled by the
+  // CLI as green-when-present and stay off fetch_log to avoid red-everywhere noise.
+  const fetchLog: Record<string, 'hit' | 'miss' | 'error'> = {}
+  if (!bioOnly) {
+    if (needsField(fields, 'soundcloud')) {
+      fetchLog.sc = braveScError ? 'error' : result.soundcloud_url ? 'hit' : 'miss'
+    }
+    if (needsField(fields, 'instagram')) {
+      fetchLog.ig = braveIgError ? 'error' : result.instagram_url ? 'hit' : 'miss'
+    }
+    if (graph) {
+      fetchLog.mb = mbError ? 'error' : mbEvidence ? 'hit' : 'miss'
+    }
+    if (discogsAttempted) {
+      fetchLog.dc = discogsError ? 'error' : discogsFound ? 'hit' : 'miss'
+    }
+    if (wantsImages) {
+      const hasImage = candidatesOnly ? !!result.image_candidates?.length : !!result.image_url
+      fetchLog.img = hasImage ? 'hit' : 'miss'
+    }
+  }
+  if (needsField(fields, 'bio') && hasBrave) {
+    const r = result.bio_research
+    const hasBio = !!(r && (r.web_sources.length > 0 || r.soundcloud_bio || r.discogs_bio || r.festival_bio))
+    fetchLog['bio-res'] = hasBio ? 'hit' : 'miss'
+  }
+  result.fetch_log = fetchLog
 
   // ── Compute confidence ──────────────────────────────────────────────────
   result.confidence = computeConfidence(result)

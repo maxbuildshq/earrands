@@ -68,6 +68,11 @@ export type EnrichmentResult = {
   sources: string[]
   needs_review: boolean
   review_notes: string[]
+  // Per-source fetch outcome for the CLI progress row: 'hit' (found data),
+  // 'miss' (queried, empty), 'error' (call threw). Only the actively-queried
+  // sources are logged — opportunistic/derived fields (embed/bc/loc/followers)
+  // stay off it and show green-when-present only. Keys: img, ig, sc, dc, mb, bio-res.
+  fetch_log?: Record<string, 'hit' | 'miss' | 'error'>
 }
 
 export type ReviewFile = {

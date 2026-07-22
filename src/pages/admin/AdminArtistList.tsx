@@ -9,14 +9,24 @@ import { useAdminArtists, useBulkUpdateArtists, useUpdateArtist, useUpdateAndRef
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
 import { useCreateJob, useAdminJobs } from '../../hooks/useAdminJobs'
 import {
-  InlineEdit, InlineLocationEdit,
+  InlineEdit, InlineLocationEdit, InlineTextEdit,
   scHandle, igHandle, bcHandle,
   scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
   discogsUrl,
 } from '../../components/admin/InlineEdit'
 
+import type { Artist, FieldConfidence } from '../../types/database'
+import {
+  aggregateLevel, CONFIDENCE_FILTERS, ENRICH_FIELDS, PAGE_SIZES,
+  rememberedFestival, rememberFestival, KEYWORDS_INPUT_CLASS,
+} from '../../lib/adminFilters'
+
 const STATUS_OPTIONS = ['all', 'pending', 'enriched', 'reviewed', 'flagged'] as const
-const PAGE_SIZES = [50, 100, 200, 300] as const
+
+// Which DB column backs each bio version (inline edits write to it)
+const BIO_COLUMN: Record<string, 'bio' | 'bio_festival' | 'bio_generated'> = {
+  Active: 'bio', Festival: 'bio_festival', Generated: 'bio_generated',
+}
 
 function ImageHover({ src }: { src: string | null }) {
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -67,12 +77,14 @@ type ArtistRow = {
   country_code: string | null
   enrichment_status: string
   enriched_at: string | null
+  enrichment_confidence: Record<string, FieldConfidence> | null
 }
 
 function BioPopover({ artist }: { artist: ArtistRow }) {
   const [show, setShow] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const activateBio = useActivateBio()
+  const updateArtist = useUpdateArtist()
 
   useEffect(() => {
     if (!show) return
@@ -126,9 +138,14 @@ function BioPopover({ artist }: { artist: ArtistRow }) {
               {s.warning && (
                 <p className="font-mono text-xs text-negative">{s.warning}</p>
               )}
-              <p className="font-mono text-xs text-text-primary leading-relaxed max-h-48 overflow-y-auto whitespace-pre-line">
-                {s.content}
-              </p>
+              <InlineTextEdit
+                value={s.content}
+                className="max-h-48 overflow-y-auto"
+                onSave={v => updateArtist.mutate({
+                  id: artist.id,
+                  [BIO_COLUMN[s.label]]: v || null,
+                } as Partial<Artist> & { id: string })}
+              />
             </div>
           ))}
         </div>
@@ -141,7 +158,9 @@ export default function AdminArtistList() {
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('q') ?? ''
   const status = searchParams.get('status') ?? 'all'
-  const festivalId = searchParams.get('festival') ?? ''
+  const confidence = searchParams.get('confidence') ?? 'all'
+  // URL param wins; otherwise fall back to the session-remembered festival
+  const festivalId = searchParams.get('festival') ?? rememberedFestival()
   const page = parseInt(searchParams.get('page') ?? '0', 10)
   const pageSize = parseInt(searchParams.get('size') ?? '50', 10)
 
@@ -160,12 +179,26 @@ export default function AdminArtistList() {
 
   const setSearch = (v: string) => setFilter('q', v)
   const setStatus = (v: string) => setFilter('status', v)
-  const setFestivalId = (v: string) => setFilter('festival', v)
+  const setConfidence = (v: string) => setFilter('confidence', v)
+  const setFestivalId = (v: string) => {
+    rememberFestival(v)
+    setFilter('festival', v)
+  }
   const setPage = (v: number) => setFilter('page', String(v), false)
   const setPageSize = (v: number) => setFilter('size', String(v))
 
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkFields, setBulkFields] = useState<Set<string>>(new Set())
   const [searchKeywords, setSearchKeywords] = useState('')
+
+  function toggleBulkField(field: string, v: boolean) {
+    setBulkFields(prev => {
+      const next = new Set(prev)
+      if (v) next.add(field)
+      else next.delete(field)
+      return next
+    })
+  }
 
   const { data: festivals = [] } = useAdminFestivals()
   useAdminJobs() // polls jobs — auto-refreshes artist data when jobs complete
@@ -181,7 +214,12 @@ export default function AdminArtistList() {
   const updateAndRefetch = useUpdateAndRefetch()
   const createJob = useCreateJob()
 
-  const artists = (result?.data ?? []) as ArtistRow[]
+  const allRows = (result?.data ?? []) as ArtistRow[]
+  // Confidence filter is client-side within the page, mirroring Enrichment Review
+  const artists = useMemo(
+    () => confidence === 'all' ? allRows : allRows.filter(a => aggregateLevel(a) === confidence),
+    [allRows, confidence],
+  )
   const totalCount = result?.count ?? 0
   const totalPages = Math.ceil(totalCount / pageSize)
 
@@ -224,7 +262,12 @@ export default function AdminArtistList() {
 
   function handleBulkEnrich() {
     const names = artists.filter(a => selected.has(a.id)).map(a => a.sort_name)
-    createJob.mutate({ type: 'enrich', artist_sort_names: names, ...(searchKeywords && { search_keywords: searchKeywords }) })
+    createJob.mutate({
+      type: 'enrich',
+      artist_sort_names: names,
+      ...(bulkFields.size > 0 && { fields: [...bulkFields] }),
+      ...(searchKeywords && { search_keywords: searchKeywords }),
+    })
     setSelected(new Set())
   }
 
@@ -290,6 +333,20 @@ export default function AdminArtistList() {
             </Button>
           ))}
         </div>
+        <div className="flex gap-0.5">
+          {CONFIDENCE_FILTERS.map(c => (
+            <Button
+              key={c}
+              variant="segment"
+              active={confidence === c}
+              fullWidth={false}
+              className="px-3 py-1.5"
+              onClick={() => setConfidence(c)}
+            >
+              {c}
+            </Button>
+          ))}
+        </div>
         <select
           value={festivalId}
           onChange={e => setFestivalId(e.target.value)}
@@ -309,8 +366,15 @@ export default function AdminArtistList() {
         <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={handleBulkApprove} disabled={selected.size === 0 || bulkUpdate.isPending}>
           Approve
         </Button>
-        <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={handleBulkEnrich} disabled={selected.size === 0 || createJob.isPending}>
-          Enrich
+        <Button
+          variant="secondary"
+          fullWidth={false}
+          className="!text-xs !px-3 !py-1"
+          onClick={handleBulkEnrich}
+          disabled={selected.size === 0 || createJob.isPending}
+          title={bulkFields.size > 0 ? `Fields: ${[...bulkFields].join(', ')}` : 'Full enrichment (no fields selected)'}
+        >
+          Enrich{bulkFields.size > 0 ? ` (${bulkFields.size} fields)` : ''}
         </Button>
         <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={handleBulkBioResearch} disabled={selected.size === 0 || createJob.isPending}>
           Bio + AI
@@ -320,8 +384,15 @@ export default function AdminArtistList() {
             Clear
           </button>
         )}
+        <span className="text-border">|</span>
+        {ENRICH_FIELDS.map(f => (
+          <label key={f} className="flex items-center gap-1 text-xs uppercase tracking-wider text-text-secondary cursor-pointer">
+            <input type="checkbox" checked={bulkFields.has(f)} onChange={e => toggleBulkField(f, e.target.checked)} className="accent-accent" />
+            {f}
+          </label>
+        ))}
         <input
-          className="bg-transparent border-b border-border text-text-primary font-mono text-xs w-40 outline-none placeholder:text-border focus:border-accent"
+          className={KEYWORDS_INPUT_CLASS}
           value={searchKeywords}
           onChange={e => setSearchKeywords(e.target.value)}
           placeholder="Search keywords..."

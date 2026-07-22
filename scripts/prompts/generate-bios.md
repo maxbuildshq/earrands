@@ -45,12 +45,12 @@ Output a JSON file with this structure:
 ### Bio guidelines
 
 - **Tone:** Neutral, music-focused, informative. Not promotional, not Wikipedia-formal. Think independent music magazine.
-- **Length:** 3-5 sentences total for the whole bio, split across 2-3 short paragraphs at logically reasonable places for readability. Include a bit of story — how they got started, what defines their sound, notable milestones. Avoid very long sentences, maximum 15-18 words per sentence.
-- **Content:** Mention genre/style, origin/location if known, notable labels or releases (don't overdo releases or labels part so it doesn't become a huge sentence), any distinctive characteristics. Drop emails, phone numbers booking contacts and similar.
+- **Length:** 3-5 sentences total for the whole bio, split across 2-3 short paragraphs at logically reasonable places for readability. Include a bit of story — how they got started, what defines their sound, notable milestones. Avoid very long sentences, maximum 15-18 words per sentence. Hard limit for the whole bio - 100 words, keep it smaller if the sources are information poor.
+- **Content:** Mention genre/style and what differentiates their style from others (what their music is like), origin/location if known, notable labels or releases (don't overdo releases or labels part so it doesn't become a huge sentence, it should be only a light touch if something significant happened), any distinctive characteristics. Drop emails, phone numbers booking contacts and similar.
 - **Do not invent facts.** Only use information present in the sources. If sources conflict, use the most commonly cited version and note the discrepancy.
 - **Do not copy text verbatim** from any source. Synthesize and rewrite.
 - **Always generate a new bio** from all available sources — treat the festival bio as one input alongside SC description, Discogs profile, and web sources. Festival bios are often too long, promotional, or venue-specific, so always synthesize a fresh version. Always set `bio_source: "generated"`. The admin will decide whether to activate the generated bio or keep the festival original.
-- **Festival bio flagging:** If `festival_bio_flagged` is true, the festival bio contains the festival's own name or venue-specific language — note this in `notes` and do not rely on it as a primary source. Use it only to cross-reference facts available elsewhere.
+- **Festival bio flagging:** If `festival_bio_flagged` is true, the festival bio contains the festival's own name or venue-specific language — note this in `notes` and do not rely on it as a primary source. Use it only to cross-reference facts available elsewhere. Avoid relying on mentioning the festival names too much in the output in case biography from a festival reveals it was created by this festival.
 - **When sources are insufficient:** Set `bio` to null, `confidence` to "low", and explain in `notes` what's missing.
 - **Source tracking:** Include in `bio_sources` only the URLs you actually used for the bio. This is for provenance tracking.
 
@@ -60,7 +60,7 @@ Output a JSON file with this structure:
 
 Good bio:
 
-> Speedy J is the alias of Dutch producer Jochem Paap, a pivotal figure in European techno since his debut on Plus 8 in 1990. Based in Rotterdam, he has continuously evolved his sound from early ambient techno through to the industrial-tinged productions he's known for today.
+> Speedy J is the alias of Dutch producer Jochem Paap, a pivotal figure in European techno since his debut on Plus 8 in 1990. Based in Rotterdam, he has continuously evolved his sound from early ambient techno through to the industrial-tinged productions he's known for today.  
 > His label Electric Deluxe, founded in 2008, has become a platform for forward-thinking techno, while his STOOR project with Lucy pushed the boundaries of live performance.
 
 Bad bio (too promotional):

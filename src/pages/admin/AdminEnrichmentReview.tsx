@@ -8,12 +8,18 @@ import { useAdminArtists, useUpdateArtist, useUpdateAndRefetch, useApproveArtist
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
 import { useCreateJob } from '../../hooks/useAdminJobs'
 import {
-  InlineEdit, InlineLocationEdit,
+  InlineEdit, InlineLocationEdit, InlineTextEdit,
   scHandle, igHandle, bcHandle,
   scParse, scBuild, igParse, igBuild, bcParse, bcBuild,
   discogsUrl,
 } from '../../components/admin/InlineEdit'
 import type { Artist, CrossLink, FieldConfidence, ImageCandidate } from '../../types/database'
+import {
+  aggregateLevel, CONFIDENCE_FILTERS, ENRICH_FIELDS, PAGE_SIZES,
+  rememberedFestival, rememberFestival, KEYWORDS_INPUT_CLASS,
+  type Level, type ConfidenceFilter,
+} from '../../lib/adminFilters'
+import { Input } from '../../components/ui/Input'
 
 const FILTERS = [
   { key: 'pending', label: 'Pending' },
@@ -23,27 +29,6 @@ const FILTERS = [
 ] as const
 
 type FilterKey = (typeof FILTERS)[number]['key']
-
-const LEVEL_ORDER = { high: 0, medium: 1, low: 2 } as const
-type Level = keyof typeof LEVEL_ORDER
-
-const CONFIDENCE_FILTERS = ['all', 'high', 'medium', 'low', 'unscored'] as const
-type ConfidenceFilter = (typeof CONFIDENCE_FILTERS)[number]
-
-// Fields that can be re-enriched (map to enrich --fields=)
-const ENRICH_FIELDS = ['image', 'soundcloud', 'instagram', 'bandcamp', 'discogs', 'location', 'followers', 'bio'] as const
-
-// Queue grouping = aggregated confidence: the weakest identity-critical field
-// (SC, image, IG) sets the group; per-field chips carry the detail (ADR 011)
-function aggregateLevel(a: Artist): Level | 'unscored' {
-  const fc = a.enrichment_confidence
-  if (!fc) return 'unscored'
-  const levels = ['soundcloud', 'image', 'instagram']
-    .map(k => fc[k]?.level)
-    .filter((l): l is Level => !!l)
-  if (levels.length === 0) return 'unscored'
-  return levels.reduce((worst, l) => LEVEL_ORDER[l] > LEVEL_ORDER[worst] ? l : worst)
-}
 
 const GROUPS: Array<{ key: Level | 'unscored'; label: string; hint: string }> = [
   { key: 'high', label: 'High confidence', hint: 'spot-check, then batch approve' },
@@ -343,8 +328,14 @@ function FieldRow({ label, chip, checked, onCheck, onSetChip, conflictLines, chi
 }
 
 // All bio versions switchable in place — read, compare, activate without leaving the card
+// Which DB column backs each bio tab (edits write to the shown version's column)
+const BIO_COLUMN: Record<string, 'bio' | 'bio_festival' | 'bio_generated'> = {
+  active: 'bio', festival: 'bio_festival', generated: 'bio_generated',
+}
+
 function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boolean; onCheck: (v: boolean) => void }) {
   const activateBio = useActivateBio()
+  const updateArtist = useUpdateArtist()
   const [tab, setTab] = useState('active')
   const versions = [
     { key: 'active', label: 'Active', content: artist.bio, activatable: false },
@@ -382,13 +373,14 @@ function BioBlock({ artist, checked, onCheck }: { artist: Artist; checked: boole
         )}
       </div>
       {current?.warning && <p className="font-mono text-[11px] bg-negative text-white px-1.5 py-0.5 inline-block">⚠ {current.warning}</p>}
-      {current?.content ? (
-        <p className="font-mono text-xs text-white leading-relaxed flex-1 min-h-0 basis-0 overflow-y-auto whitespace-pre-line pr-1">
-          {current.content}
-        </p>
-      ) : (
-        <p className="font-mono text-xs text-text-secondary">No bio</p>
-      )}
+      <InlineTextEdit
+        value={current?.content ?? ''}
+        className="flex-1 min-h-0 basis-0 overflow-y-auto pr-1"
+        onSave={v => updateArtist.mutate({
+          id: artist.id,
+          [BIO_COLUMN[current?.key ?? 'active']]: v || null,
+        } as Partial<Artist> & { id: string })}
+      />
     </div>
   )
 }
@@ -419,7 +411,12 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
 
   function saveField(field: string, confKey: string, value: string | number | null) {
     const updates = { [field]: value, enrichment_confidence: confirmField(artist, confKey) }
-    if (field === 'soundcloud_url' && value && value !== artist.soundcloud_url) {
+    // SC or Discogs handle changes re-fetch profile images into the carousel
+    // server-side (update_and_refetch), so route those through the refetch path.
+    const triggersRefetch =
+      (field === 'soundcloud_url' && value && value !== artist.soundcloud_url) ||
+      (field === 'discogs_id' && value && value !== artist.discogs_id)
+    if (triggersRefetch) {
       updateAndRefetch.mutate({ artistId: artist.id, updates: updates as Partial<Artist> })
     } else {
       updateArtist.mutate({ id: artist.id, ...updates } as Partial<Artist> & { id: string })
@@ -570,19 +567,31 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
 export default function AdminEnrichmentReview() {
   const [filter, setFilter] = useState<FilterKey>('pending')
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all')
-  const [festivalId, setFestivalId] = useState('')
-  const [focusIndex, setFocusIndex] = useState(0)
+  const [festivalId, setFestivalIdState] = useState(rememberedFestival)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState<number>(200)
+  // Focus tracks the artist's ID, not a list index: approve/flag mutate the list
+  // (the card leaves the queue), and an index would drift — the classic skip-two.
+  const [focusId, setFocusId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkFields, setBulkFields] = useState<Set<string>>(new Set())
   const [searchKeywords, setSearchKeywords] = useState('')
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  function setFestivalId(v: string) {
+    setFestivalIdState(v)
+    rememberFestival(v)
+  }
 
   const { data: festivals = [] } = useAdminFestivals()
   const { data: result, isLoading } = useAdminArtists({
     status: filter === 'candidates' ? undefined : filter,
     hasCandidates: filter === 'candidates' || undefined,
     festivalId: festivalId || undefined,
-    limit: 200,
+    search: search || undefined,
+    limit: pageSize,
+    offset: page * pageSize,
   })
   const updateArtist = useUpdateArtist()
   const approveArtists = useApproveArtists()
@@ -602,6 +611,17 @@ export default function AdminEnrichmentReview() {
   }, [artists, confidenceFilter])
 
   const flatList = useMemo(() => grouped.flatMap(g => g.artists), [grouped])
+
+  // Resolve the focused artist to its current index; fall back to the first card
+  // when nothing is focused or the focused artist has left the list.
+  const focusPos = useMemo(() => {
+    if (focusId) {
+      const idx = flatList.findIndex(a => a.id === focusId)
+      if (idx >= 0) return idx
+    }
+    return 0
+  }, [focusId, flatList])
+  const focusedId = flatList[focusPos]?.id ?? null
 
   const approve = useCallback((artist: Artist) => {
     approveArtists.mutate({ artistIds: [artist.id] })
@@ -646,47 +666,57 @@ export default function AdminEnrichmentReview() {
     setSelected(allSelected ? new Set() : new Set(flatList.map(a => a.id)))
   }
 
-  // Keyboard: K next, J previous (per Boss), A approve + advance, X flag + advance
+  // Keyboard: K next, J previous (per Boss), A approve + advance, X flag + advance.
+  // Focus advances by target ID captured before the action, so approve/flag (which
+  // remove the card from the queue) land focus on the next card, never skipping one.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.repeat) return  // ignore held-key auto-repeat (double-approve guard)
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
       if (flatList.length === 0) return
       const key = e.key.toLowerCase()
+      const idx = focusPos
       if (key === 'k') {
         e.preventDefault()
-        setFocusIndex(i => Math.min(i + 1, flatList.length - 1))
+        setFocusId(flatList[Math.min(idx + 1, flatList.length - 1)]?.id ?? null)
       } else if (key === 'j') {
         e.preventDefault()
-        setFocusIndex(i => Math.max(i - 1, 0))
+        setFocusId(flatList[Math.max(idx - 1, 0)]?.id ?? null)
       } else if (key === 'a') {
         e.preventDefault()
-        const artist = flatList[focusIndex]
+        const artist = flatList[idx]
         if (artist) {
+          const next = flatList[idx + 1] ?? flatList[idx - 1] ?? null
           approve(artist)
-          setFocusIndex(i => Math.min(i + 1, flatList.length - 1))
+          setFocusId(next?.id ?? null)
         }
       } else if (key === 'x') {
         e.preventDefault()
-        const artist = flatList[focusIndex]
+        const artist = flatList[idx]
         if (artist) {
+          const next = flatList[idx + 1] ?? flatList[idx - 1] ?? null
           flag(artist)
-          setFocusIndex(i => Math.min(i + 1, flatList.length - 1))
+          setFocusId(next?.id ?? null)
         }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [flatList, focusIndex, approve, flag])
+  }, [flatList, focusPos, approve, flag])
 
   useEffect(() => {
-    const artist = flatList[focusIndex]
+    const artist = flatList[focusPos]
     if (artist) {
       cardRefs.current.get(artist.id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
-  }, [focusIndex, flatList])
+  }, [focusPos, flatList])
 
-  useEffect(() => { setFocusIndex(0) }, [filter, confidenceFilter, festivalId])
+  useEffect(() => { setFocusId(null) }, [filter, confidenceFilter, festivalId, search, page, pageSize])
+  useEffect(() => { setPage(0) }, [filter, confidenceFilter, festivalId, search, pageSize])
+
+  const totalCount = result?.count ?? 0
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   return (
     <div className="space-y-4">
@@ -699,6 +729,9 @@ export default function AdminEnrichmentReview() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
+        <div className="w-48">
+          <Input placeholder="Search artists..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
         <div className="flex gap-0.5">
           {FILTERS.map(f => (
             <Button key={f.key} variant="segment" active={filter === f.key} fullWidth={false} className="px-3 py-1.5" onClick={() => setFilter(f.key)}>
@@ -723,7 +756,7 @@ export default function AdminEnrichmentReview() {
             <option key={f.id} value={f.id}>{f.name}</option>
           ))}
         </select>
-        <span className="font-mono text-sm text-text-secondary">{flatList.length} of {result?.count ?? 0} artists</span>
+        <span className="font-mono text-sm text-text-secondary">{flatList.length} of {totalCount} artists</span>
       </div>
 
       {/* Bulk enrichment bar */}
@@ -740,7 +773,7 @@ export default function AdminEnrichmentReview() {
           </label>
         ))}
         <input
-          className="bg-transparent border-b border-border text-text-primary font-mono text-xs w-40 outline-none placeholder:text-border focus:border-accent"
+          className={KEYWORDS_INPUT_CLASS}
           value={searchKeywords}
           onChange={e => setSearchKeywords(e.target.value)}
           placeholder="Search keywords..."
@@ -761,6 +794,18 @@ export default function AdminEnrichmentReview() {
             Clear
           </button>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-text-secondary text-xs uppercase tracking-wider">Per page:</span>
+          {PAGE_SIZES.map(s => (
+            <button
+              key={s}
+              className={`text-xs px-1 ${pageSize === s ? 'text-accent font-bold' : 'text-text-secondary hover:text-accent'}`}
+              onClick={() => setPageSize(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading ? (
@@ -794,7 +839,7 @@ export default function AdminEnrichmentReview() {
                 <ReviewCard
                   key={a.id}
                   artist={a}
-                  focused={flatList[focusIndex]?.id === a.id}
+                  focused={a.id === focusedId}
                   selected={selected.has(a.id)}
                   onSelect={v => setSelected(prev => {
                     const next = new Set(prev)
@@ -814,6 +859,29 @@ export default function AdminEnrichmentReview() {
             </div>
           </section>
         ))
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between font-mono text-sm">
+          <span className="text-text-secondary">
+            Page {page + 1} of {totalPages} ({totalCount} total)
+          </span>
+          <div className="flex gap-1">
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(0)} disabled={page === 0}>
+              ««
+            </Button>
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(page - 1)} disabled={page === 0}>
+              «
+            </Button>
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(page + 1)} disabled={page >= totalPages - 1}>
+              »
+            </Button>
+            <Button variant="secondary" fullWidth={false} className="!text-xs !px-3 !py-1" onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>
+              »»
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

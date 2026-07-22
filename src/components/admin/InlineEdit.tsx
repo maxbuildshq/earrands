@@ -122,6 +122,67 @@ export function InlineEdit({
   )
 }
 
+// Multiline inline editor for bios (paragraphs). ⌘/Ctrl+Enter or blur saves,
+// Esc cancels, plain Enter inserts a newline. `className` tunes the text/edit box
+// (e.g. scroll + max-height) so each admin surface keeps its own layout.
+export function InlineTextEdit({
+  value,
+  onSave,
+  className = '',
+  placeholder = 'No bio — click to add',
+}: {
+  value: string | null
+  onSave: (val: string) => void
+  className?: string
+  placeholder?: string
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value ?? '')
+
+  function commit() {
+    const next = draft.trim()
+    if (next !== (value ?? '').trim()) onSave(next)
+    setEditing(false)
+  }
+  function cancel() {
+    setDraft(value ?? '')
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        className={`w-full bg-surface border border-accent text-white font-mono text-xs leading-relaxed outline-none p-1.5 resize-y min-h-32 ${className}`}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commit() }
+          if (e.key === 'Escape') { e.preventDefault(); cancel() }
+        }}
+        autoFocus
+      />
+    )
+  }
+
+  return (
+    <div className="group relative">
+      {value ? (
+        <p className={`font-mono text-xs text-white leading-relaxed whitespace-pre-line ${className}`}>{value}</p>
+      ) : (
+        <p className="font-mono text-xs text-text-secondary italic">{placeholder}</p>
+      )}
+      <button
+        className="opacity-0 group-hover:opacity-100 text-text-secondary hover:text-accent transition-opacity text-[11px] absolute top-0 right-0 bg-surface/80 px-1"
+        onClick={() => { setDraft(value ?? ''); setEditing(true) }}
+        title="Edit (⌘/Ctrl+Enter to save · Esc to cancel)"
+      >
+        ✎ edit
+      </button>
+    </div>
+  )
+}
+
 export function InlineLocationEdit({
   city,
   countryCode,

@@ -7,7 +7,7 @@ import { writeReviewFile, readReviewFile, loadProgress, saveProgress, clearProgr
 import { isComboEntry } from './lib/enrichment/name-utils.js'
 import type { EnrichmentField, EnrichmentResult, ArtistRow, BioResearch, BioSource } from './lib/enrichment/types.js'
 import { generateArtistBio } from './lib/enrichment/bio-generator.js'
-import { flushUsage, fetchMonthUsage, estimateRunBudget, BUDGETS } from './lib/enrichment/rate-limit.js'
+import { flushUsage, fetchMonthUsage, estimateRunBudget, BUDGETS, pendingUsage } from './lib/enrichment/rate-limit.js'
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -120,6 +120,11 @@ function confirm(question: string): Promise<boolean> {
       resolve(answer.trim().toLowerCase() === 'y')
     })
   })
+}
+
+function hasUsableBioResearch(r: EnrichmentResult): boolean {
+  const b = r.bio_research
+  return !!(b && (b.web_sources.length > 0 || b.soundcloud_bio || b.discogs_bio || b.festival_bio))
 }
 
 function deriveBioSources(research: BioResearch, soundcloudUrl: string | null, discogsId: number | null): BioSource[] {
@@ -409,6 +414,7 @@ async function main() {
   }
 
   const results: EnrichmentResult[] = []
+  let biosGenerated = 0
   const completedNames: string[] = resume
     ? loadProgress(festivalArg ?? null).completed_sort_names
     : []
@@ -433,24 +439,57 @@ async function main() {
       } : artist
       const result = await enrichArtist(artistToEnrich, config)
       results.push(result)
+
+      // Inline AI bio generation (Item 4) — every source for this artist is
+      // gathered now, so generate + persist its bio before advancing rather than
+      // walking the whole list a second time. Skipped on dry runs; progress is
+      // saved AFTER so --resume re-does an artist whose bio write failed.
+      let bioGenerated = false
+      if (!dryRun && hasUsableBioResearch(result)) {
+        process.stdout.write(`\r  ${chalk.bold(progress)} ${artist.name} ${chalk.dim('generating bio…')}${''.padEnd(30)}`)
+        const bio = generateArtistBio(result.display_name, result.bio_research!)
+        if (bio) {
+          const { error } = await supabase
+            .from('artists')
+            .update({ bio_generated: bio })
+            .eq('sort_name', result.sort_name)
+          if (error) result.review_notes.push(`bio_generated write failed: ${error.message}`)
+          else { bioGenerated = true; biosGenerated++ }
+        }
+      }
+
       completedNames.push(artist.sort_name)
       saveProgress(festivalArg ?? null, completedNames)
 
-      // Status indicator
-      const parts: string[] = []
-      if (result.image_url) parts.push('img')
-      if (result.instagram_url) parts.push('ig')
-      if (result.soundcloud_url) parts.push('sc')
-      if (result.soundcloud_embed_url) parts.push('embed')
-      if (result.bandcamp_url) parts.push('bc')
-      if (result.city) parts.push('loc')
-      if (result.soundcloud_followers != null) parts.push('followers')
-      if (result.bio_research) parts.push('bio-res')
+      // Status row — queried sources green (hit) / red (miss|error) from
+      // fetch_log; opportunistic/derived fields green-when-present only.
+      const fl = result.fetch_log ?? {}
+      const tags: string[] = []
+      let anyHit = false
+      const pushLogged = (label: string, outcome?: 'hit' | 'miss' | 'error') => {
+        if (!outcome) return
+        if (outcome === 'hit') { anyHit = true; tags.push(chalk.green(label)) }
+        else tags.push(chalk.red(label))
+      }
+      const pushPresent = (label: string, present: boolean) => {
+        if (present) { anyHit = true; tags.push(chalk.green(label)) }
+      }
+      pushLogged('img', fl.img)
+      pushLogged('ig', fl.ig)
+      pushLogged('sc', fl.sc)
+      pushLogged('dc', fl.dc)
+      pushLogged('mb', fl.mb)
+      pushPresent('embed', !!result.soundcloud_embed_url)
+      pushPresent('bc', !!result.bandcamp_url)
+      pushPresent('loc', !!result.city)
+      pushPresent('followers', result.soundcloud_followers != null)
+      pushLogged('bio-res', fl['bio-res'])
+      if (bioGenerated) { anyHit = true; tags.push(chalk.green('bio')) }
 
-      const status = parts.length > 0
-        ? chalk.green(`✓ [${parts.join(', ')}]`)
-        : result.review_notes.includes('Skipped: combo/temporary entry')
-          ? chalk.dim('skip')
+      const status = result.review_notes.includes('Skipped: combo/temporary entry')
+        ? chalk.dim('skip')
+        : tags.length > 0
+          ? `${anyHit ? chalk.green('✓') : chalk.red('✕')} [${tags.join(', ')}]`
           : chalk.yellow('✕ not found')
 
       console.log(`\r  ${chalk.bold(progress)} ${artist.name} ${status}${''.padEnd(20)}`)
@@ -486,6 +525,9 @@ async function main() {
     }
   }
 
+  // Snapshot per-vendor API calls before flushing (flush zeroes the counters)
+  const apiCalls = pendingUsage()
+
   // Persist real API consumption (dry runs included — the calls happened)
   await flushUsage(supabase)
 
@@ -494,12 +536,36 @@ async function main() {
   const enriched = results.filter(r => r.soundcloud_url || r.instagram_url || r.image_url)
   const needsReview = results.filter(r => r.needs_review)
   const notFound = results.filter(r => !r.soundcloud_url && !r.instagram_url && !r.image_url && !r.review_notes.includes('Skipped: combo/temporary entry'))
+  const errored = results.filter(r => r.review_notes.some(n => n.startsWith('Pipeline error:')))
+  // Artists never reached (e.g. a rate-limit break mid-run)
+  const processedNames = new Set(results.map(r => r.sort_name))
+  const notProcessed = artists.filter(a => !processedNames.has(a.sort_name))
 
   console.log(chalk.bold('  Summary'))
   console.log(`    Total:        ${results.length}`)
   console.log(`    Enriched:     ${chalk.green(String(enriched.length))}`)
   console.log(`    Needs review: ${chalk.yellow(String(needsReview.length))}`)
   console.log(`    Not found:    ${chalk.red(String(notFound.length))}`)
+  if (biosGenerated > 0) console.log(`    Bios written: ${chalk.green(String(biosGenerated))}`)
+
+  // Name the artists with issues (Item 2) — not-found / errored / not-processed
+  const names = (rs: Array<{ display_name: string }>) => rs.map(r => r.display_name).join(', ')
+  if (notFound.length > 0) {
+    console.log(chalk.red(`\n  Not found (${notFound.length}): `) + chalk.dim(names(notFound)))
+  }
+  if (errored.length > 0) {
+    console.log(chalk.red(`  Errored (${errored.length}): `) + chalk.dim(names(errored)))
+  }
+  if (notProcessed.length > 0) {
+    console.log(chalk.red(`  Not processed (${notProcessed.length}): `) + chalk.dim(notProcessed.map(a => a.name).join(', ')))
+  }
+
+  // Per-vendor API call census for this run (Item 5)
+  const callEntries = Object.entries(apiCalls).filter(([, n]) => n > 0)
+  if (callEntries.length > 0) {
+    const total = callEntries.reduce((s, [, n]) => s + n, 0)
+    console.log(chalk.dim(`\n  API calls this run (${total}): ${callEntries.map(([v, n]) => `${v} ${n}`).join(' · ')}`))
+  }
 
   // Write review file
   const reviewPath = writeReviewFile(festivalArg ?? null, results, fields)
@@ -531,36 +597,7 @@ async function main() {
     console.log(chalk.dim(`\n  Review the file, then run:`))
     console.log(chalk.dim(`    npm run enrich -- --apply=${reviewPath}`))
   }
-
-  // Generate AI bios from research using Claude CLI
-  const withResearch = results.filter(r => r.bio_research && (
-    r.bio_research.web_sources.length > 0 ||
-    r.bio_research.soundcloud_bio ||
-    r.bio_research.discogs_bio ||
-    r.bio_research.festival_bio
-  ))
-  if (withResearch.length > 0 && !dryRun) {
-    console.log(chalk.dim(`\n  Generating AI bios for ${withResearch.length} artist(s)...`))
-    let generated = 0
-    for (const r of withResearch) {
-      process.stdout.write(`\r  ${chalk.dim('[AI bio]')} ${r.display_name}${''.padEnd(30)}`)
-      const bio = generateArtistBio(r.display_name, r.bio_research!)
-      if (bio) {
-        const { error } = await supabase
-          .from('artists')
-          .update({ bio_generated: bio })
-          .eq('sort_name', r.sort_name)
-        if (error) {
-          console.error(chalk.red(`\n  ✕ ${r.display_name} bio_generated: ${error.message}`))
-        } else {
-          generated++
-        }
-      } else {
-        console.log(chalk.dim(`\r  ${chalk.yellow('–')} ${r.display_name}: insufficient sources for bio${''.padEnd(20)}`))
-      }
-    }
-    console.log(`\r  ${chalk.green(`Generated ${generated}/${withResearch.length} AI bios`)}${''.padEnd(30)}`)
-  }
+  // AI bios are now generated inline per artist during the main loop (Item 4).
 }
 
 // ── Poll Jobs Mode ──────────────────────────────────────────────────────────

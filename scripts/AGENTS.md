@@ -176,7 +176,9 @@ Pipeline in `scripts/lib/enrichment/`. Populates `artists.image_url`, `instagram
 7. **Instagram resolution** → multi-source cross-reference: SC profile link (most authoritative) → Discogs → Brave Search; conflicts flagged in review notes
 8. **SoundCloud oEmbed** → validate embed URL
 9. **Bio research** (when `--fields=bio`) → Brave Search for biography pages (5 query exclusions in-query; full 24-domain exclusion list client-side), fetch up to 5 pages with content relevance check, bundle with SC/Discogs/festival bios into `bio_research` JSONB
-10. **AI bio generation** (when `--fields=bio`, after apply) → calls `claude -p --model claude-sonnet-4-6 --thinking-budget-tokens 1024` per artist; writes result directly to `artists.bio_generated` in DB
+10. **AI bio generation** (when `--fields=bio`) → calls `claude -p --model sonnet` **inline, right after this artist's other sources are gathered** (not a second pass over the list); writes result directly to `artists.bio_generated` in DB. Skipped on `--dry-run`.
+
+The CLI progress row tags each **queried** source by outcome — green when data was found, red on miss/error (`img, ig, sc, dc, mb, bio-res, bio`); opportunistic/derived fields (`embed, bc, loc, followers`) show green-when-present only. The run summary names the not-found / errored / not-processed artists and prints a per-vendor API-call census.
 
 Skips combo/temporary artist entries (B2B placeholders with `is_collective: false` + `&`/`b2b`/`vs` in sort_name).
 
@@ -229,7 +231,7 @@ Bio research and AI generation run together when `--fields=bio` is used — no s
 - `festival_bio` — bio from ingest; `festival_bio_flagged: true` if it contains the festival brand name
 - `web_sources[]` — up to 5 web pages with title, snippet, full content (5000 chars each)
 
-**Generation phase**: after research is written to DB, `bio-generator.ts` calls the `claude` CLI (Sonnet, low thinking) with a constructed prompt and writes the result to `artists.bio_generated`.
+**Generation phase**: `bio-generator.ts` calls the `claude` CLI (`--model sonnet`) with a constructed prompt and writes the result to `artists.bio_generated`. Runs **inline per artist** during the main loop — right after that artist's other sources are gathered — not as a separate second pass.
 
 **Admin review**: admin compares Active Bio / Festival Bio / Generated Bio on the artist detail page and activates the preferred version. Festival bios flagged as containing the festival name show a warning in the UI — admin should not activate these cross-festival.
 
@@ -268,7 +270,7 @@ scripts/lib/enrichment/
   discogs.ts          # search + all_images + URLs + bio profile
   bandcamp.ts         # location scraping from Bandcamp pages
   image-scorer.ts     # Cloudflare DETR person detection for image candidate selection
-  bio-generator.ts    # Claude CLI call for AI bio generation (Sonnet, low thinking)
+  bio-generator.ts    # Claude CLI call for AI bio generation (--model sonnet)
   name-utils.ts       # query construction, URL parsing, combo detection
   review.ts           # review file + bio research chunks + apply + resume
 scripts/prompts/
