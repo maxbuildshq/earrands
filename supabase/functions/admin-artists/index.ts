@@ -60,6 +60,7 @@ async function scrapeSoundCloudProfile(scUrl: string) {
     if (u.avatar_url) {
       result.image_url = u.avatar_url.replace('-large', '-t500x500')
     }
+    if (typeof u.followers_count === 'number') result.followers_count = u.followers_count
 
     const webProfiles = hydration.find((h: { hydratable: string }) => h.hydratable === 'webProfiles')
     if (webProfiles?.data) {
@@ -250,17 +251,22 @@ Deno.serve(async (req) => {
       // SoundCloud URL change → refresh profile metadata + avatar (winner) and
       // the SC candidate thumbnail in the carousel.
       const scUrlChanged = updates.soundcloud_url && updates.soundcloud_url !== current?.soundcloud_url
+      // SoundCloud cleared → drop the SC-derived candidate/embed/followers so the
+      // carousel and follower count don't keep showing a profile that's gone.
+      const scUrlCleared = 'soundcloud_url' in updates && !updates.soundcloud_url && !!current?.soundcloud_url
       if (scUrlChanged && updates.soundcloud_url) {
         const scData = await scrapeSoundCloudProfile(updates.soundcloud_url)
         if (scData) {
-          // Strip sc_description (not a real column) and refresh only profile
-          // metadata (image / location / followers). Crucially, do NOT touch
-          // bio_source: this re-fetch does not change the active `bio` text, so
-          // relabeling it 'soundcloud' mis-attributed a previously-activated bio
-          // (e.g. the generated one) to SoundCloud. The SC bio text is captured
-          // separately during full enrichment via bio_research.
-          const { sc_description: _sc, ...rest } = scData as Record<string, unknown>
+          // Strip sc_description (not a real column) and map followers_count to the
+          // real column, then refresh only profile metadata (image / location /
+          // followers). Crucially, do NOT touch bio_source: this re-fetch does not
+          // change the active `bio` text, so relabeling it 'soundcloud'
+          // mis-attributed a previously-activated bio (e.g. the generated one) to
+          // SoundCloud. The SC bio text is captured separately during full
+          // enrichment via bio_research.
+          const { sc_description: _sc, followers_count, ...rest } = scData as Record<string, unknown>
           Object.assign(refetchedFields, rest)
+          if (typeof followers_count === 'number') refetchedFields.soundcloud_followers = followers_count
           if (typeof rest.image_url === 'string') {
             candidates = upsertSoundcloudCandidate(candidates, rest.image_url)
             candidatesChanged = true
@@ -268,11 +274,18 @@ Deno.serve(async (req) => {
         }
         // Keep the embed URL in sync with the profile URL whenever it changes
         refetchedFields.soundcloud_embed_url = updates.soundcloud_url
+      } else if (scUrlCleared) {
+        candidates = candidates.filter(c => c.source !== 'soundcloud-image')
+        candidatesChanged = true
+        refetchedFields.soundcloud_embed_url = null
+        refetchedFields.soundcloud_followers = null
       }
 
       // Discogs id change → refetch the Discogs image set into the carousel and
       // point the winner at the new primary, mirroring the SoundCloud behavior.
       const discogsIdChanged = updates.discogs_id != null && updates.discogs_id !== current?.discogs_id
+      // Discogs cleared → drop the Discogs image candidates from the carousel.
+      const discogsIdCleared = 'discogs_id' in updates && updates.discogs_id == null && current?.discogs_id != null
       if (discogsIdChanged) {
         const dcImages = await fetchDiscogsImages(updates.discogs_id as number)
         if (dcImages && dcImages.length > 0) {
@@ -280,6 +293,9 @@ Deno.serve(async (req) => {
           candidatesChanged = true
           refetchedFields.image_url = dcImages[0]
         }
+      } else if (discogsIdCleared) {
+        candidates = candidates.filter(c => !c.source.startsWith('discogs-image'))
+        candidatesChanged = true
       }
 
       if (candidatesChanged) refetchedFields.image_candidates = candidates
@@ -339,6 +355,47 @@ Deno.serve(async (req) => {
         if (!error) updated++
       }
       return json({ count: updated })
+    }
+
+    // Wipe every machine-enriched field for a junk artist (generic name, all
+    // searches came back garbage) in one shot — EXCEPT the bio versions, which
+    // often come from a separate reliable source. Drops image candidates too and
+    // strips the cleared fields' confidence keys, keeping any bio-related ones.
+    if (action === 'clean') {
+      const { artist_id } = body
+      if (!artist_id) return json({ error: 'Missing artist_id' }, 400)
+
+      const { data: current } = await supabase
+        .from('artists')
+        .select('enrichment_confidence')
+        .eq('id', artist_id)
+        .single()
+
+      const clearedKeys = ['image', 'soundcloud', 'instagram', 'bandcamp', 'discogs', 'location', 'followers']
+      const confidence = { ...(current?.enrichment_confidence ?? {}) }
+      for (const key of clearedKeys) delete confidence[key]
+
+      const { data, error } = await supabase
+        .from('artists')
+        .update({
+          image_url: null,
+          image_candidates: null,
+          instagram_url: null,
+          soundcloud_url: null,
+          soundcloud_embed_url: null,
+          bandcamp_url: null,
+          discogs_id: null,
+          city: null,
+          country_code: null,
+          soundcloud_followers: null,
+          enrichment_status: 'pending',
+          enrichment_confidence: confidence,
+        })
+        .eq('id', artist_id)
+        .select()
+        .single()
+      if (error) return json({ error: error.message }, 500)
+      return json({ data })
     }
 
     if (action === 'bulk_update') {

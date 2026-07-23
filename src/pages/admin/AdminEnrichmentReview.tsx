@@ -4,7 +4,7 @@ import { Heading } from '../../components/ui/Heading'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { EnrichmentStatusBadge } from '../../components/admin/EnrichmentStatusBadge'
-import { useAdminArtists, useUpdateArtist, useUpdateAndRefetch, useApproveArtists, useActivateBio } from '../../hooks/useAdminArtists'
+import { useAdminArtists, useUpdateArtist, useUpdateAndRefetch, useApproveArtists, useActivateBio, useCleanArtist } from '../../hooks/useAdminArtists'
 import { useAdminFestivals } from '../../hooks/useAdminFestivals'
 import { useCreateJob } from '../../hooks/useAdminJobs'
 import {
@@ -233,7 +233,7 @@ function HoverPreview({ src, label, children }: { src: string; label?: string; c
   )
 }
 
-function Carousel({ artist, onPick }: { artist: Artist; onPick: (url: string) => void }) {
+function Carousel({ artist, onPick, onClear }: { artist: Artist; onPick: (url: string) => void; onClear: () => void }) {
   const candidates = useMemo(
     () => [...(artist.image_candidates ?? [])].sort((a, b) => candidateRank(b) - candidateRank(a)),
     [artist.image_candidates],
@@ -259,6 +259,28 @@ function Carousel({ artist, onPick }: { artist: Artist; onPick: (url: string) =>
           No image
         </div>
       )}
+      {/* Paste any URL directly (when the right image isn't in the carousel), or clear the winner */}
+      <div className="flex items-center gap-1">
+        <div className="min-w-0 flex-1">
+          <InlineEdit
+            value={selected ?? ''}
+            displayValue={selected ? 'paste url' : null}
+            href={null}
+            onSave={v => { if (v) onPick(v) }}
+            placeholder="https://…"
+          />
+        </div>
+        {selected && (
+          <button
+            type="button"
+            className="text-text-secondary hover:text-negative text-xs shrink-0"
+            onClick={onClear}
+            title="Clear image (candidates kept)"
+          >
+            ✕
+          </button>
+        )}
+      </div>
       {candidates.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {candidates.map(c => (
@@ -397,6 +419,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
 }) {
   const updateArtist = useUpdateArtist()
   const updateAndRefetch = useUpdateAndRefetch()
+  const cleanArtist = useCleanArtist()
   const [enrichFields, setEnrichFields] = useState<Set<string>>(new Set())
   const fc = artist.enrichment_confidence ?? {}
 
@@ -411,11 +434,13 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
 
   function saveField(field: string, confKey: string, value: string | number | null) {
     const updates = { [field]: value, enrichment_confidence: confirmField(artist, confKey) }
-    // SC or Discogs handle changes re-fetch profile images into the carousel
+    // SC or Discogs changes re-fetch/clean profile images in the carousel
     // server-side (update_and_refetch), so route those through the refetch path.
+    // Clearing (value → null) counts too: that's what drops the stale candidate
+    // thumbnails + follower/embed on the server.
     const triggersRefetch =
-      (field === 'soundcloud_url' && value && value !== artist.soundcloud_url) ||
-      (field === 'discogs_id' && value && value !== artist.discogs_id)
+      (field === 'soundcloud_url' && value !== artist.soundcloud_url) ||
+      (field === 'discogs_id' && value !== artist.discogs_id)
     if (triggersRefetch) {
       updateAndRefetch.mutate({ artistId: artist.id, updates: updates as Partial<Artist> })
     } else {
@@ -429,6 +454,19 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
       image_url: url,
       enrichment_confidence: confirmField(artist, 'image'),
     } as Partial<Artist> & { id: string })
+  }
+
+  function clearImage() {
+    updateArtist.mutate({
+      id: artist.id,
+      image_url: null,
+      enrichment_confidence: confirmField(artist, 'image'),
+    } as Partial<Artist> & { id: string })
+  }
+
+  function cleanAll() {
+    if (!window.confirm(`Wipe all enrichment for “${artist.name}”? (Bio is kept.)`)) return
+    cleanArtist.mutate({ artistId: artist.id })
   }
 
   function setConfidence(key: string, level: Level) {
@@ -462,7 +500,7 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
           <span className="text-[10px] font-mono uppercase tracking-wider text-text-secondary">Image</span>
           <ConfidenceChip fc={fc.image} onSet={l => setConfidence('image', l)} />
         </div>
-        <Carousel artist={artist} onPick={pickImage} />
+        <Carousel artist={artist} onPick={pickImage} onClear={clearImage} />
       </div>
 
       <div className="w-72 shrink-0 space-y-1.5 font-mono text-sm">
@@ -558,6 +596,15 @@ function ReviewCard({ artist, focused, selected, onSelect, onApprove, onFlag, on
           title={enrichFields.size > 0 ? `Re-enrich: ${[...enrichFields].join(', ')}` : 'Full enrichment'}
         >
           Enrich{enrichFields.size > 0 ? ` (${enrichFields.size})` : ''}
+        </Button>
+        <Button
+          variant="secondary"
+          fullWidth={false}
+          className="!text-xs !px-2 !py-1.5 !text-negative !border-negative"
+          onClick={cleanAll}
+          title="Wipe all enrichment fields (keeps bio)"
+        >
+          Clean all
         </Button>
       </div>
     </div>

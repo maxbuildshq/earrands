@@ -127,6 +127,48 @@ export function useUpdateAndRefetch() {
   })
 }
 
+// Wipe all machine-enriched fields for a junk artist in one shot (bio kept).
+// Server-side `clean` action does the authoritative wipe; we optimistically null
+// the same fields so the card blanks instantly.
+const CLEANED_PATCH: Partial<Artist> = {
+  image_url: null,
+  image_candidates: null,
+  instagram_url: null,
+  soundcloud_url: null,
+  soundcloud_embed_url: null,
+  bandcamp_url: null,
+  discogs_id: null,
+  city: null,
+  country_code: null,
+  soundcloud_followers: null,
+  enrichment_status: 'pending',
+}
+
+export function useCleanArtist() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ artistId }: { artistId: string }) =>
+      adminFetch<{ data: Artist }>('admin-artists', {
+        method: 'POST',
+        body: { action: 'clean', artist_id: artistId },
+      }),
+    onMutate: async ({ artistId }) => {
+      await cancelArtistQueries(queryClient)
+      const snap = snapshotArtistCaches(queryClient)
+      patchArtistInCaches(queryClient, artistId, CLEANED_PATCH)
+      return { snap }
+    },
+    onError: (err, _vars, context) => {
+      console.error('Clean artist failed — reverting:', err)
+      if (context?.snap) restoreArtistCaches(queryClient, context.snap)
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'artists'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'artist'] })
+    },
+  })
+}
+
 export function useBulkUpdateArtists() {
   const queryClient = useQueryClient()
   return useMutation({
