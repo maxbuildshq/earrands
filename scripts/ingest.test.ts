@@ -103,7 +103,7 @@ describe('computeDiff', () => {
   it('detects fresh festival (all sets added)', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '14:00', end_time: '16:00', is_live: false },
+        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '14:00', end_time: '16:00', performance_type: null },
       ],
     })
     const db = makeDbState({ festival: null, stages: [], sets: [] })
@@ -119,13 +119,13 @@ describe('computeDiff', () => {
     const scraped = makeScrapedData({
       stages: [{ name: 'Main', sort_order: 1 }],
       sets: [
-        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '14:00', end_time: '16:00', is_live: false },
+        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '14:00', end_time: '16:00', performance_type: null },
       ],
     })
     const db = makeDbState({
       stages: [{ id: 'stage-1', festival_id: 'fest-uuid', name: 'Main', sort_order: 1 }],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Ben UFO', day: '2026-08-01', start_time: '14:00', end_time: '16:00', is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Ben UFO', day: '2026-08-01', start_time: '14:00', end_time: '16:00', performance_type: null },
       ],
     })
 
@@ -141,13 +141,13 @@ describe('computeDiff', () => {
     const scraped = makeScrapedData({
       stages: [{ name: 'Main', sort_order: 1 }],
       sets: [
-        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '15:00', end_time: '17:00', is_live: false },
+        { artist_name: 'Ben UFO', stage: 'Main', day: '2026-08-01', start_time: '15:00', end_time: '17:00', performance_type: null },
       ],
     })
     const db = makeDbState({
       stages: [{ id: 'stage-1', festival_id: 'fest-uuid', name: 'Main', sort_order: 1 }],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Ben UFO', day: '2026-08-01', start_time: '14:00', end_time: '16:00', is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Ben UFO', day: '2026-08-01', start_time: '14:00', end_time: '16:00', performance_type: null },
       ],
     })
 
@@ -159,17 +159,17 @@ describe('computeDiff', () => {
     expect(setDiff.rescheduled).toHaveLength(0)
   })
 
-  it('detects is_live change as update', () => {
+  it('detects performance_type change as update', () => {
     const scraped = makeScrapedData({
       stages: [{ name: 'Main', sort_order: 1 }],
       sets: [
-        { artist_name: 'Alex Wilcox', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '21:00', is_live: true },
+        { artist_name: 'Alex Wilcox', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '21:00', performance_type: 'live' },
       ],
     })
     const db = makeDbState({
       stages: [{ id: 'stage-1', festival_id: 'fest-uuid', name: 'Main', sort_order: 1 }],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Alex Wilcox', day: '2026-08-02', start_time: '20:00', end_time: '21:00', is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Alex Wilcox', day: '2026-08-02', start_time: '20:00', end_time: '21:00', performance_type: null },
       ],
     })
 
@@ -183,7 +183,7 @@ describe('computeDiff', () => {
   it('detects new set (not in DB)', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'New Artist', stage: 'Main', day: '2026-08-01', start_time: '11:00', end_time: '13:00', is_live: false },
+        { artist_name: 'New Artist', stage: 'Main', day: '2026-08-01', start_time: '11:00', end_time: '13:00', performance_type: null },
       ],
     })
     const db = makeDbState()
@@ -198,7 +198,7 @@ describe('computeDiff', () => {
     const db = makeDbState({
       stages: [{ id: 'stage-1', festival_id: 'fest-uuid', name: 'Main', sort_order: 1 }],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Cancelled Artist', day: '2026-07-31', start_time: '18:00', end_time: '20:00', is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Cancelled Artist', day: '2026-07-31', start_time: '18:00', end_time: '20:00', performance_type: null },
       ],
     })
 
@@ -211,13 +211,13 @@ describe('computeDiff', () => {
     const scraped = makeScrapedData({
       stages: [{ name: 'Main', sort_order: 1 }],
       sets: [
-        { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '22:00', is_live: false },
+        { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '22:00', performance_type: null },
       ],
     })
     const db = makeDbState({
       stages: [{ id: 'stage-1', festival_id: 'fest-uuid', name: 'Main', sort_order: 1 }],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Speedy J', day: '2026-08-01', start_time: '21:00', end_time: '23:00', is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Speedy J', day: '2026-08-01', start_time: '21:00', end_time: '23:00', performance_type: null },
       ],
     })
 
@@ -237,7 +237,7 @@ describe('computeDiff', () => {
         { name: 'Paradiso', sort_order: 2 },
       ],
       sets: [
-        { artist_name: 'Josey Rebelle', stage: 'Paradiso', day: '2026-07-30', start_time: null, end_time: null, is_live: false },
+        { artist_name: 'Josey Rebelle', stage: 'Paradiso', day: '2026-07-30', start_time: null, end_time: null, performance_type: null },
       ],
     })
     const db = makeDbState({
@@ -246,7 +246,7 @@ describe('computeDiff', () => {
         { id: 'stage-2', festival_id: 'fest-uuid', name: 'Paradiso', sort_order: 2 },
       ],
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Josey Rebelle', day: '2026-07-30', start_time: null, end_time: null, is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: 'stage-1', artist_name: 'Josey Rebelle', day: '2026-07-30', start_time: null, end_time: null, performance_type: null },
       ],
     })
 
@@ -259,12 +259,12 @@ describe('computeDiff', () => {
   it('handles NULL stage exact match', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'Space Afrika', stage: null, day: '2026-07-29', start_time: null, end_time: null, is_live: false },
+        { artist_name: 'Space Afrika', stage: null, day: '2026-07-29', start_time: null, end_time: null, performance_type: null },
       ],
     })
     const db = makeDbState({
       sets: [
-        { id: 'set-1', festival_id: 'fest-uuid', stage_id: null, artist_name: 'Space Afrika', day: '2026-07-29', start_time: null, end_time: null, is_live: false },
+        { id: 'set-1', festival_id: 'fest-uuid', stage_id: null, artist_name: 'Space Afrika', day: '2026-07-29', start_time: null, end_time: null, performance_type: null },
       ],
     })
 
@@ -283,8 +283,8 @@ describe('computeFlags', () => {
     const setDiff = {
       added: [], removed: [], updated: [], unchanged: [],
       rescheduled: [{
-        scraped: { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '22:00', is_live: false },
-        existing: { artist_name: 'Speedy J', stage_name: 'Main', day: '2026-08-01', start_time: '21:00', end_time: '23:00', is_live: false },
+        scraped: { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-02', start_time: '20:00', end_time: '22:00', performance_type: null },
+        existing: { artist_name: 'Speedy J', stage_name: 'Main', day: '2026-08-01', start_time: '21:00', end_time: '23:00', performance_type: null },
       }],
     }
 
@@ -297,7 +297,7 @@ describe('computeFlags', () => {
     const setDiff = {
       added: [], updated: [], unchanged: [], rescheduled: [],
       removed: [{
-        artist_name: 'Gone Artist', stage_name: 'Main', day: '2026-08-01', start_time: '18:00', end_time: '20:00', is_live: false,
+        artist_name: 'Gone Artist', stage_name: 'Main', day: '2026-08-01', start_time: '18:00', end_time: '20:00', performance_type: null,
       }],
     }
 
@@ -308,7 +308,7 @@ describe('computeFlags', () => {
   it('flags sets with no start_time in timetable-announced festival', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'No Time', stage: 'Main', day: '2026-08-01', start_time: null, end_time: null, is_live: false },
+        { artist_name: 'No Time', stage: 'Main', day: '2026-08-01', start_time: null, end_time: null, performance_type: null },
       ],
     })
     const setDiff = { added: [], removed: [], updated: [], unchanged: [], rescheduled: [] }

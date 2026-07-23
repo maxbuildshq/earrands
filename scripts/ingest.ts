@@ -112,7 +112,7 @@ async function fetchCurrentState(slug: string): Promise<DbState> {
 
   const { data: sets } = await supabase
     .from('sets')
-    .select('id, festival_id, stage_id, artist_name, day, start_time, end_time, is_live')
+    .select('id, festival_id, stage_id, artist_name, day, start_time, end_time, performance_type')
     .eq('festival_id', festival.id)
 
   const { data: artists } = await supabase

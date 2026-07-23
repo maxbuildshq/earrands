@@ -129,6 +129,12 @@ The artist parser returns `collective: null` for `&` collab patterns (temporary 
 
 See `docs/decisions/005` for how the frontend displays these.
 
+### Performance type (live / hybrid)
+
+`sets.performance_type` (`'live' | 'hybrid' | null`, migration 040) is the **single source of truth** for a set's mode — the column the UI reads for the Live/Hybrid badge. The legacy `sets.is_live` boolean was **retired** (dropped in migration 041, see ADR 012).
+
+`ScrapedSet.performance_type` is what scrapers emit and `generateSql` writes **directly on every set insert/update** — no `is_live`, no per-migration backfill (do not add one; migrations ≤040 backfilled only because the pipeline predated this). Mark a live set `'live'`, a hybrid set `'hybrid'`, a normal DJ set `null`. Defensive fallback: `validateScrapedData` (LLM path) maps any stray legacy `is_live` boolean a model still emits to `performance_type`, so nothing is lost. `poster-vision`'s internal `VisionBlock.is_live` is the vision model's raw live-tag read, converted to `performance_type` where the `ScrapedSet` is built — not the retired column.
+
 ## Artist Normalization
 
 Parsing in `scripts/lib/artist-parser.ts` (shared by `ingest.ts` and `parse-artists.ts`).

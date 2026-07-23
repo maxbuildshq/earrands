@@ -50,7 +50,7 @@ describe('generateSql', () => {
   it('writes bio_festival alongside bio on insert and preserves it via ON CONFLICT', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'Ben Klock', stage: null, day: '2026-07-01', start_time: null, end_time: null, is_live: false },
+        { artist_name: 'Ben Klock', stage: null, day: '2026-07-01', start_time: null, end_time: null, performance_type: null },
       ],
       artists: [
         { name: 'Ben Klock', bio: 'A techno DJ from Berlin.', source_url: 'https://example.com/ben-klock' },
@@ -69,7 +69,7 @@ describe('generateSql', () => {
   it('omits bio_festival when no bio was scraped', () => {
     const scraped = makeScrapedData({
       sets: [
-        { artist_name: 'Unknown DJ', stage: null, day: '2026-07-01', start_time: null, end_time: null, is_live: false },
+        { artist_name: 'Unknown DJ', stage: null, day: '2026-07-01', start_time: null, end_time: null, performance_type: null },
       ],
       artists: [],
     })
@@ -77,5 +77,20 @@ describe('generateSql', () => {
     const sql = generateSql(scraped, emptySetDiff)
 
     expect(sql).toContain("VALUES ('Unknown DJ', 'unknown dj', false)")
+  })
+
+  it('writes performance_type on set insert (live / hybrid / normal → NULL) and never is_live', () => {
+    const liveSet = { artist_name: 'Luigi Tozzi', stage: null, day: '2026-07-01', start_time: null, end_time: null, performance_type: 'live' as const }
+    const hybridSet = { artist_name: 'Fjaak', stage: null, day: '2026-07-01', start_time: null, end_time: null, performance_type: 'hybrid' as const }
+    const normalSet = { artist_name: 'Call Super', stage: null, day: '2026-07-01', start_time: null, end_time: null, performance_type: null }
+    const scraped = makeScrapedData({ sets: [liveSet, hybridSet, normalSet] })
+
+    const sql = generateSql(scraped, { ...emptySetDiff, added: [liveSet, hybridSet, normalSet] })
+
+    expect(sql).toContain('INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, performance_type)')
+    expect(sql).not.toContain('is_live')
+    expect(sql).toContain("'Luigi Tozzi', '2026-07-01', NULL, NULL, 'live')")
+    expect(sql).toContain("'Fjaak', '2026-07-01', NULL, NULL, 'hybrid')")
+    expect(sql).toContain("'Call Super', '2026-07-01', NULL, NULL, NULL)")
   })
 })

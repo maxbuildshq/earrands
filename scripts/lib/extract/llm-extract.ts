@@ -24,7 +24,7 @@ const SCHEMA_DESCRIPTION = `{
     "day": string,                   // calendar date YYYY-MM-DD the set STARTS on (after-midnight sets belong to the previous festival day's date only if the site groups them that way — use the site's grouping)
     "start_time": string | null,     // HH:MM 24h; null if lineup-only
     "end_time": string | null,
-    "is_live": boolean               // true if marked live/(live)/LIVE
+    "performance_type": string | null // "live" if marked live/(live)/LIVE, "hybrid" if marked hybrid, else null
   }],
   "artists": [{
     "name": string,                  // individual artist name
@@ -102,6 +102,16 @@ export function validateScrapedData(input: unknown): ValidationResult {
     errors.push('sets must be an array')
   } else {
     if (data.sets.length === 0) warnings.push('no sets extracted')
+    // Normalize the set mode to performance_type ('live' | 'hybrid' | null). Defensive: a model
+    // may still emit the retired is_live boolean (ADR 012) — map it rather than lose the flag,
+    // and coerce any unexpected performance_type value to null.
+    for (const s of data.sets as Array<Record<string, unknown>>) {
+      if (s.performance_type === undefined || s.performance_type === '') {
+        s.performance_type = s.is_live ? 'live' : null
+      }
+      if (s.performance_type !== 'live' && s.performance_type !== 'hybrid') s.performance_type = null
+      delete s.is_live
+    }
     const stageNames = new Set((data.stages ?? []).map(s => s.name))
     const seen = new Set<string>()
     data.sets.forEach((s, i) => {
@@ -160,7 +170,7 @@ const CHUNK_SCHEMA = `{
     "day": string,                   // calendar date YYYY-MM-DD the set STARTS on
     "start_time": string | null,     // HH:MM 24h; null if lineup-only
     "end_time": string | null,
-    "is_live": boolean               // true if marked live/(live)/LIVE
+    "performance_type": string | null // "live" if marked live/(live)/LIVE, "hybrid" if marked hybrid, else null
   }],
   "artists": [{
     "name": string,                  // individual artist name

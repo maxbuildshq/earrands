@@ -210,18 +210,23 @@ export function SchedulePage() {
 
   // Lineup-only mode for festivals without timetable
   if (!festival.timetable_announced) {
+    // In the lineup phase the per-day split is usually unknown, so sets are parked on a single
+    // day. Drive the toggle off the days the sets actually cover and only show it when the
+    // lineup genuinely spans more than one day — otherwise a multi-day festival shows empty chips.
+    const lineupDays = [...new Set(sets.map(s => s.day))].sort()
+    const lineupDay = lineupDays.includes(selectedDay) ? selectedDay : (lineupDays[0] ?? selectedDay)
     return (
       <div className="pt-4">
         {showRecap && (
           <RecapBanner festival={festival} level={recapStats.level} surface="schedule" onOpen={() => setRecapOpen(true)} />
         )}
-        {days.length > 0 && (
-          <DayToggle days={days} selectedDay={selectedDay} onSelect={setSelectedDay} />
+        {lineupDays.length > 1 && (
+          <DayToggle days={lineupDays} selectedDay={lineupDay} onSelect={setSelectedDay} />
         )}
         <LineupView
           festival={festival}
           sets={sets}
-          day={selectedDay}
+          day={lineupDay}
           isGoing={(id) => isGoing(id)}
           onToggleGoing={(id) => toggleGoing(id)}
         />

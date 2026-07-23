@@ -8,7 +8,9 @@
 festivals    id, name, slug, location, start_date, end_date, timetable_announced, published (default false), created_at
 stages       id, festival_id, name, sort_order
 sets         id, festival_id, stage_id (nullable), artist_name, day,
-             start_time (nullable), end_time (nullable), is_live, awakenings_url
+             start_time (nullable), end_time (nullable), awakenings_url
+             -- later: is_music_set (025); performance_type 'live'|'hybrid'|null (040).
+             -- is_live existed in 001 but was retired in 041 (ADR 012) — use performance_type.
 user_plans   id, user_id, set_id, created_at          -- "going to" marks
 user_ratings id, user_id, set_id, rating(-1|1), created_at
 ```

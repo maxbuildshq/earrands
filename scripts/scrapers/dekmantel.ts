@@ -153,7 +153,7 @@ export async function scrapeDekmantel(url: string): Promise<ScrapedData> {
       day,
       start_time: startTime,
       end_time: endTime,
-      is_live: isLive,
+      performance_type: isLive ? 'live' : null,
     })
 
     // Extract bio from timeslot content or artist sub-object
@@ -301,7 +301,7 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
   // canonical-casing + live-status lookup from Nuxt set names (authoritative spelling)
   const canonical = new Map<string, CanonicalName>()
   for (const s of nuxtResult.sets) {
-    canonical.set(normalizeName(s.artist_name), { name: s.artist_name, isLive: s.is_live })
+    canonical.set(normalizeName(s.artist_name), { name: s.artist_name, isLive: s.performance_type === 'live' })
   }
 
   console.log('Discovering timetable poster images...')
@@ -349,7 +349,9 @@ export async function scrapeDekmantelHybrid(url: string): Promise<ScrapedData> {
         ...s,
         stage: dawnStage,
         artist_name: match?.name ?? dawnName, // Nuxt casing/spelling wins when the artist matches
-        is_live: s.is_live || (match?.isLive ?? false),
+        // 'live' if either the poster tag or the Nuxt lineup says live (poster-vision detects
+        // only live, never hybrid — recovering hybrid stays a manual step, see migration 040).
+        performance_type: (s.performance_type === 'live' || (match?.isLive ?? false)) ? 'live' : null,
       })
     }
     console.log(`  ${day}: ${result.sets.length} sets`)

@@ -172,7 +172,7 @@ export async function scrapeAwakenings(url: string): Promise<ScrapedData> {
           day: dayDate,
           start_time: times?.start_time ?? null,
           end_time: times?.end_time ?? null,
-          is_live: isLive,
+          performance_type: isLive ? 'live' : null,
         })
 
         for (const link of extractArtistLinks($container, $)) {
