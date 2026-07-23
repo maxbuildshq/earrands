@@ -87,8 +87,8 @@ async function main() {
   lines.push(`  -- Non-musical events (idempotent: skip if an identical row already exists)`)
   for (const e of events) {
     const stageRef = `(stage_ids->>'${escSql(e.stage)}')::uuid`
-    lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, is_live, is_music_set)`)
-    lines.push(`  SELECT fest_id, ${stageRef}, '${escSql(e.title)}', '${e.day}', '${e.start_time}', '${e.end_time}', false, false`)
+    lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, performance_type, is_music_set)`)
+    lines.push(`  SELECT fest_id, ${stageRef}, '${escSql(e.title)}', '${e.day}', '${e.start_time}', '${e.end_time}', NULL, false`)
     lines.push(`  WHERE NOT EXISTS (`)
     lines.push(`    SELECT 1 FROM sets WHERE festival_id = fest_id AND artist_name = '${escSql(e.title)}' AND day = '${e.day}'`)
     lines.push(`      AND start_time = '${e.start_time}' AND stage_id = ${stageRef}`)

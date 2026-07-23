@@ -1,12 +1,18 @@
 import { parseArtistName } from './artist-parser.js'
-import type { ScrapedData, ScrapedSet } from '../scrapers/types.js'
+import type { ScrapedData, ScrapedSet, PerformanceType } from '../scrapers/types.js'
+
+// performance_type is the single source of truth for a set's mode (migration 040; the legacy
+// is_live column was retired, see ADR 012). SQL literal for the column value.
+function perfSql(p: PerformanceType | null): string {
+  return p ? `'${p}'` : 'NULL'
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 export type DbState = {
   festival: { id: string; name: string; slug: string; location: string | null; start_date: string; end_date: string; timetable_announced: boolean } | null
   stages: Array<{ id: string; festival_id: string; name: string; sort_order: number }>
-  sets: Array<{ id: string; festival_id: string; stage_id: string | null; artist_name: string; day: string; start_time: string | null; end_time: string | null; is_live: boolean }>
+  sets: Array<{ id: string; festival_id: string; stage_id: string | null; artist_name: string; day: string; start_time: string | null; end_time: string | null; performance_type: PerformanceType | null }>
   artists: Array<{ id: string; name: string; sort_name: string; bio: string | null; source_url: string | null }>
 }
 
@@ -23,7 +29,7 @@ export type ExistingSetInfo = {
   stage_name: string | null
   start_time: string | null
   end_time: string | null
-  is_live: boolean
+  performance_type: PerformanceType | null
 }
 
 export type SetDiff = {
@@ -140,7 +146,7 @@ export function computeDiff(scraped: ScrapedData, current: DbState): DiffResult 
       stage_name: stageIdToName.get(s.stage_id ?? '') ?? null,
       start_time: s.start_time,
       end_time: s.end_time,
-      is_live: s.is_live,
+      performance_type: s.performance_type,
     }
   }
 
@@ -168,8 +174,8 @@ export function computeDiff(scraped: ScrapedData, current: DbState): DiffResult 
       changes.push(`start: ${existing.start_time ?? 'null'} → ${set.start_time ?? 'null'}`)
     if (normalizeTime(set.end_time) !== normalizeTime(existing.end_time))
       changes.push(`end: ${existing.end_time ?? 'null'} → ${set.end_time ?? 'null'}`)
-    if (set.is_live !== existing.is_live)
-      changes.push(`live: ${existing.is_live} → ${set.is_live}`)
+    if ((set.performance_type ?? null) !== existing.performance_type)
+      changes.push(`performance: ${existing.performance_type ?? 'normal'} → ${set.performance_type ?? 'normal'}`)
 
     if (changes.length > 0) {
       setDiff.updated.push({ scraped: set, existing, changes })
@@ -405,8 +411,8 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
         setClauses.push(`start_time = ${s.start_time ? `'${s.start_time}'` : 'NULL'}`)
       if (normalizeTime(s.end_time) !== normalizeTime(e.end_time))
         setClauses.push(`end_time = ${s.end_time ? `'${s.end_time}'` : 'NULL'}`)
-      if (s.is_live !== e.is_live)
-        setClauses.push(`is_live = ${s.is_live}`)
+      if ((s.performance_type ?? null) !== e.performance_type)
+        setClauses.push(`performance_type = ${perfSql(s.performance_type)}`)
       if (setClauses.length > 0) {
         lines.push(`  -- ${changes.join(', ')}`)
         lines.push(`  UPDATE sets SET ${setClauses.join(', ')} WHERE ${existingSetWhere(e)};`)
@@ -422,7 +428,7 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       const startTime = s.start_time ? `'${s.start_time}'` : 'NULL'
       const endTime = s.end_time ? `'${s.end_time}'` : 'NULL'
       lines.push(`  -- ⚠ RESCHEDULE: was ${e.stage_name ?? 'no stage'} / ${e.day} ${e.start_time ?? ''}`)
-      lines.push(`  UPDATE sets SET day = '${s.day}', stage_id = ${stageRef}, start_time = ${startTime}, end_time = ${endTime}, is_live = ${s.is_live}`)
+      lines.push(`  UPDATE sets SET day = '${s.day}', stage_id = ${stageRef}, start_time = ${startTime}, end_time = ${endTime}, performance_type = ${perfSql(s.performance_type)}`)
       lines.push(`    WHERE ${existingSetWhere(e)};`)
       lines.push('')
     }
@@ -434,8 +440,8 @@ export function generateSql(scraped: ScrapedData, setDiff: SetDiff): string {
       const stageRef = set.stage ? `(stage_ids->>'${escSql(set.stage)}')::uuid` : 'NULL'
       const startTime = set.start_time ? `'${set.start_time}'` : 'NULL'
       const endTime = set.end_time ? `'${set.end_time}'` : 'NULL'
-      lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, is_live)`)
-      lines.push(`  VALUES (fest_id, ${stageRef}, '${escSql(set.artist_name)}', '${set.day}', ${startTime}, ${endTime}, ${set.is_live});`)
+      lines.push(`  INSERT INTO sets (festival_id, stage_id, artist_name, day, start_time, end_time, performance_type)`)
+      lines.push(`  VALUES (fest_id, ${stageRef}, '${escSql(set.artist_name)}', '${set.day}', ${startTime}, ${endTime}, ${perfSql(set.performance_type)});`)
       lines.push('')
     }
   }

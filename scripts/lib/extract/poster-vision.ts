@@ -400,7 +400,7 @@ export async function extractPosterDayVision(
           artist_name: b.artist_name, stage: strip.name, day: day ?? '',
           start_time: formatHour(s.start),
           end_time: formatHour(s.end),
-          is_live: !!b.is_live,
+          performance_type: b.is_live ? 'live' : null,
         })
       })
     } else {
@@ -412,7 +412,7 @@ export async function extractPosterDayVision(
         artist_name: b.artist_name, stage: strip.name, day: day ?? '',
         start_time: formatHour(yToTime(b.top_y, axisCal)),
         end_time: formatHour(yToTime(b.bottom_y, axisCal)),
-        is_live: !!b.is_live,
+        performance_type: b.is_live ? 'live' : null,
       }))
     }
     ;(debug.columns as Record<string, unknown>)[strip.name] = {

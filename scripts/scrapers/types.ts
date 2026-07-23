@@ -13,13 +13,18 @@ export type ScrapedStage = {
   sort_order: number
 }
 
+// Mutually-exclusive performance modes (sets.performance_type, migration 040 — the single
+// source of truth for a set's mode; the legacy is_live boolean was retired, see ADR 012).
+// "live" = live PA/hardware set; "hybrid" = mix of DJing + live composition; null = normal DJ set.
+export type PerformanceType = 'live' | 'hybrid'
+
 export type ScrapedSet = {
   artist_name: string // raw string, e.g. "Alarico & Ben Klock"
   stage: string | null // null if lineup-only
   day: string // YYYY-MM-DD
   start_time: string | null // HH:MM, null if lineup-only
   end_time: string | null
-  is_live: boolean
+  performance_type: PerformanceType | null
 }
 
 export type ScrapedArtist = {

@@ -14,8 +14,8 @@ const valid = {
   },
   stages: [{ name: 'Main', sort_order: 0 }],
   sets: [
-    { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-01', start_time: '22:00', end_time: '23:30', is_live: false },
-    { artist_name: 'KI/KI', stage: 'Main', day: '2026-08-01', start_time: '23:30', end_time: '01:00', is_live: true },
+    { artist_name: 'Speedy J', stage: 'Main', day: '2026-08-01', start_time: '22:00', end_time: '23:30', performance_type: null },
+    { artist_name: 'KI/KI', stage: 'Main', day: '2026-08-01', start_time: '23:30', end_time: '01:00', performance_type: 'live' },
   ],
   artists: [],
 }
@@ -58,11 +58,26 @@ describe('validateScrapedData', () => {
     }
   })
 
+  it('normalizes a legacy is_live boolean to performance_type (ADR 012)', () => {
+    const legacy: any = structuredClone(valid)
+    legacy.sets = [
+      { artist_name: 'A', stage: 'Main', day: '2026-08-01', start_time: '22:00', end_time: '23:00', is_live: true },
+      { artist_name: 'B', stage: 'Main', day: '2026-08-01', start_time: '23:00', end_time: '23:30', is_live: false },
+    ]
+    const r = validateScrapedData(legacy)
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.data.sets[0].performance_type).toBe('live')
+      expect(r.data.sets[1].performance_type).toBeNull()
+      expect((r.data.sets[0] as any).is_live).toBeUndefined()
+    }
+  })
+
   it('allows lineup-only sets (null stage/times) and warns on partial times', () => {
     const lineup = structuredClone(valid)
     lineup.sets = [
-      { artist_name: 'Speedy J', stage: null as any, day: '2026-08-01', start_time: null as any, end_time: null as any, is_live: false },
-      { artist_name: 'KI/KI', stage: 'Main', day: '2026-08-01', start_time: '23:30', end_time: '01:00', is_live: true },
+      { artist_name: 'Speedy J', stage: null as any, day: '2026-08-01', start_time: null as any, end_time: null as any, performance_type: null },
+      { artist_name: 'KI/KI', stage: 'Main', day: '2026-08-01', start_time: '23:30', end_time: '01:00', performance_type: 'live' },
     ]
     const r = validateScrapedData(lineup)
     expect(r.ok).toBe(true)
